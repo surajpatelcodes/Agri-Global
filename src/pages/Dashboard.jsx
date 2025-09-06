@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, DollarSign, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, CreditCard, DollarSign, TrendingUp, Plus, Eye, FileText, Calendar, Sparkles } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -10,14 +12,30 @@ const Dashboard = () => {
     totalPayments: 0,
     totalOutstanding: 0,
   });
+  const [userProfile, setUserProfile] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    fetchDashboardStats();
+    fetchDashboardData();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Fetch user profile
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        
+        setUserProfile(profileData);
+      }
+
       // Get total customers
       const { count: customersCount } = await supabase
         .from("customers")
@@ -38,6 +56,39 @@ const Dashboard = () => {
         .from("customer_outstanding")
         .select("outstanding");
 
+      // Get recent activity (latest credits and payments)
+      const { data: recentCredits } = await supabase
+        .from("credits")
+        .select("id, amount, created_at, customers(name)")
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      const { data: recentPaymentsData } = await supabase
+        .from("payments")
+        .select("id, amount, created_at, credits(customers(name))")
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      // Combine and sort recent activity
+      const activity = [
+        ...(recentCredits || []).map(credit => ({
+          id: credit.id,
+          type: 'credit',
+          amount: credit.amount,
+          customer: credit.customers?.name,
+          time: credit.created_at,
+        })),
+        ...(recentPaymentsData || []).map(payment => ({
+          id: payment.id,
+          type: 'payment',
+          amount: payment.amount,
+          customer: payment.credits?.customers?.name,
+          time: payment.created_at,
+        })),
+      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
+
+      setRecentActivity(activity);
+
       const totalCredits = creditsData?.reduce((sum, credit) => sum + Number(credit.amount), 0) || 0;
       const totalPayments = paymentsData?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
       const totalOutstanding = outstandingData?.reduce((sum, customer) => sum + Number(customer.outstanding), 0) || 0;
@@ -49,7 +100,12 @@ const Dashboard = () => {
         totalOutstanding,
       });
     } catch (error) {
-      console.error("Error fetching dashboard stats:", error);
+      console.error("Error fetching dashboard data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -62,6 +118,23 @@ const Dashboard = () => {
     }).format(amount);
   };
 
+  const formatTimeAgo = (dateString) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
   const dashboardCards = [
     {
       title: "Total Customers",
@@ -69,6 +142,7 @@ const Dashboard = () => {
       icon: Users,
       color: "text-blue-600",
       bgColor: "bg-blue-100",
+      gradient: "from-blue-500 to-blue-600",
     },
     {
       title: "Total Credits Issued",
@@ -76,6 +150,7 @@ const Dashboard = () => {
       icon: CreditCard,
       color: "text-green-600",
       bgColor: "bg-green-100",
+      gradient: "from-green-500 to-green-600",
     },
     {
       title: "Total Payments Received",
@@ -83,6 +158,7 @@ const Dashboard = () => {
       icon: DollarSign,
       color: "text-purple-600",
       bgColor: "bg-purple-100",
+      gradient: "from-purple-500 to-purple-600",
     },
     {
       title: "Total Outstanding",
@@ -90,49 +166,117 @@ const Dashboard = () => {
       icon: TrendingUp,
       color: "text-red-600",
       bgColor: "bg-red-100",
+      gradient: "from-red-500 to-red-600",
+    },
+  ];
+
+  const quickActions = [
+    {
+      title: "Add Customer",
+      description: "Register new customer",
+      icon: Users,
+      action: () => {},
+      gradient: "from-blue-500 to-blue-600",
+    },
+    {
+      title: "Issue Credit",
+      description: "Create new credit",
+      icon: CreditCard,
+      action: () => {},
+      gradient: "from-green-500 to-green-600",
+    },
+    {
+      title: "Record Payment",
+      description: "Add new payment",
+      icon: DollarSign,
+      action: () => {},
+      gradient: "from-purple-500 to-purple-600",
+    },
+    {
+      title: "View Reports",
+      description: "Generate reports",
+      icon: FileText,
+      action: () => {},
+      gradient: "from-orange-500 to-orange-600",
     },
   ];
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <div className="animate-pulse">
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded mb-2 w-1/3"></div>
+          <div className="h-4 bg-gray-200 rounded mb-6 w-1/2"></div>
+        </div>
+        <div className="responsive-grid">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
                 <div className="h-4 bg-gray-200 rounded mb-2"></div>
                 <div className="h-8 bg-gray-200 rounded"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your agricultural credit business</p>
+    <div className="space-y-8 animate-fade-in">
+      {/* Welcome Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 p-8 text-white">
+        <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-transparent"></div>
+        <div className="relative z-10">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
+                <Sparkles className="h-8 w-8 text-yellow-300" />
+                {getGreeting()}, {userProfile?.full_name || 'Welcome'}!
+              </h1>
+              <p className="text-green-100 text-lg">
+                {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Cross-Shop Network Active
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-green-200 mb-1">Today</div>
+              <div className="text-2xl font-bold">
+                {new Date().toLocaleDateString('en-IN', { 
+                  day: 'numeric', 
+                  month: 'short',
+                  weekday: 'short'
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="absolute top-4 right-4 opacity-10">
+          <Calendar className="h-24 w-24" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats Cards */}
+      <div className="responsive-grid">
         {dashboardCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card key={index} className="card-3d hover-glow group cursor-pointer overflow-hidden border-0 shadow-lg">
+              <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
                 <CardTitle className="text-sm font-medium text-gray-600">
                   {card.title}
                 </CardTitle>
-                <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                  <Icon className={`h-4 w-4 ${card.color}`} />
+                <div className={`p-3 rounded-xl ${card.bgColor} group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className={`h-5 w-5 ${card.color}`} />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
+              <CardContent className="relative z-10">
+                <div className="text-3xl font-bold text-gray-900 mb-1">
                   {card.value}
+                </div>
+                <div className="flex items-center text-xs text-gray-500">
+                  <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
+                  <span>Cross-shop data</span>
                 </div>
               </CardContent>
             </Card>
@@ -140,62 +284,80 @@ const Dashboard = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+      {/* Recent Activity & Quick Actions */}
+      <div className="responsive-grid-2">
+        {/* Recent Activity */}
+        <Card className="card-3d hover-lift">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest transactions and updates</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-green-600" />
+              </div>
+              Recent Activity
+            </CardTitle>
+            <CardDescription>Latest transactions across all shops</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">New credit issued</p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
+              {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
+                <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className={`w-3 h-3 rounded-full ${
+                    activity.type === 'credit' ? 'bg-green-500' : 'bg-blue-500'
+                  }`}></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {activity.type === 'credit' ? 'Credit issued' : 'Payment received'}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {activity.customer} • {formatCurrency(activity.amount)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {formatTimeAgo(activity.time)}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Payment received</p>
-                  <p className="text-xs text-gray-500">5 hours ago</p>
+              )) : (
+                <div className="text-center py-6 text-gray-500">
+                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No recent activity</p>
                 </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">New customer registered</p>
-                  <p className="text-xs text-gray-500">1 day ago</p>
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Quick Actions */}
+        <Card className="card-3d hover-lift">
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Plus className="h-5 w-5 text-purple-600" />
+              </div>
+              Quick Actions
+            </CardTitle>
             <CardDescription>Common tasks and shortcuts</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <button className="p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="text-sm font-medium">Add Customer</div>
-                <div className="text-xs text-gray-500">Register new customer</div>
-              </button>
-              <button className="p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="text-sm font-medium">Issue Credit</div>
-                <div className="text-xs text-gray-500">Create new credit</div>
-              </button>
-              <button className="p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="text-sm font-medium">Record Payment</div>
-                <div className="text-xs text-gray-500">Add new payment</div>
-              </button>
-              <button className="p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="text-sm font-medium">View Reports</div>
-                <div className="text-xs text-gray-500">Generate reports</div>
-              </button>
+              {quickActions.map((action, index) => {
+                const Icon = action.icon;
+                return (
+                  <Button
+                    key={index}
+                    variant="ghost"
+                    className="h-auto p-4 flex-col gap-3 hover:shadow-lg transition-all duration-300 group border border-gray-100 hover:border-gray-200"
+                    onClick={action.action}
+                  >
+                    <div className={`p-3 rounded-xl bg-gradient-to-br ${action.gradient} text-white group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-gray-900">{action.title}</div>
+                      <div className="text-xs text-gray-500">{action.description}</div>
+                    </div>
+                  </Button>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

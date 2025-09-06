@@ -159,7 +159,9 @@ export type Database = {
           is_admin: boolean | null
           license_number: string | null
           phone: string | null
+          shop_location: string | null
           shop_name: string | null
+          shop_owner: string | null
         }
         Insert: {
           address?: string | null
@@ -170,7 +172,9 @@ export type Database = {
           is_admin?: boolean | null
           license_number?: string | null
           phone?: string | null
+          shop_location?: string | null
           shop_name?: string | null
+          shop_owner?: string | null
         }
         Update: {
           address?: string | null
@@ -181,7 +185,9 @@ export type Database = {
           is_admin?: boolean | null
           license_number?: string | null
           phone?: string | null
+          shop_location?: string | null
           shop_name?: string | null
+          shop_owner?: string | null
         }
         Relationships: []
       }
