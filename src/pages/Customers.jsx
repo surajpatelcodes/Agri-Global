@@ -13,19 +13,37 @@ const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [aadharSearch, setAadharSearch] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [searchMode, setSearchMode] = useState("my"); // "my" or "aadhar"
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
+    getCurrentUser();
     fetchCustomers();
   }, []);
 
+  const getCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error("Error getting current user:", error);
+    }
+  };
+
   const fetchCustomers = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data, error } = await supabase
         .from("customers")
         .select("*")
+        .eq("created_by", user?.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -39,6 +57,34 @@ const Customers = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const searchByAadhar = async () => {
+    if (!aadharSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .ilike("id_proof", `%${aadharSearch.trim()}%`)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error("Error searching customers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to search customers",
+        variant: "destructive",
+      });
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -148,6 +194,9 @@ const Customers = () => {
     customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const displayCustomers = searchMode === "my" ? filteredCustomers : searchResults;
+  const isOwner = (customer) => customer.created_by === currentUser?.id;
 
   const CustomerForm = ({ customer, onSubmit, title, description }) => (
     <div className="space-y-6">
@@ -287,21 +336,61 @@ const Customers = () => {
         </Dialog>
       </div>
 
-      {/* Search Section */}
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <Input
-            placeholder="Search customers by name or phone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12 border-gray-200 focus:border-green-500 transition-all duration-300 rounded-xl"
-          />
+      {/* Search Mode Toggle */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-fit">
+          <Button
+            variant={searchMode === "my" ? "default" : "ghost"}
+            onClick={() => setSearchMode("my")}
+            className="rounded-lg px-6 py-2 text-sm font-medium transition-all duration-300"
+          >
+            <User className="h-4 w-4 mr-2" />
+            My Customers
+          </Button>
+          <Button
+            variant={searchMode === "aadhar" ? "default" : "ghost"}
+            onClick={() => setSearchMode("aadhar")}
+            className="rounded-lg px-6 py-2 text-sm font-medium transition-all duration-300"
+          >
+            <IdCard className="h-4 w-4 mr-2" />
+            Aadhar Search
+          </Button>
         </div>
+
+        {searchMode === "my" ? (
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Input
+              placeholder="Search your customers by name or phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 h-12 border-gray-200 focus:border-green-500 transition-all duration-300 rounded-xl"
+            />
+          </div>
+        ) : (
+          <div className="flex gap-3 flex-1 max-w-md">
+            <div className="relative flex-1">
+              <IdCard className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Input
+                placeholder="Enter Aadhar number to search..."
+                value={aadharSearch}
+                onChange={(e) => setAadharSearch(e.target.value)}
+                className="pl-12 h-12 border-gray-200 focus:border-blue-500 transition-all duration-300 rounded-xl"
+              />
+            </div>
+            <Button
+              onClick={searchByAadhar}
+              disabled={searchLoading}
+              className="btn-3d bg-gradient-to-r from-blue-500 to-blue-600 hover:shadow-lg px-6 h-12"
+            >
+              {searchLoading ? "Searching..." : "Search"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Customer Grid */}
-      {filteredCustomers.length === 0 ? (
+      {displayCustomers.length === 0 ? (
         <Card className="card-3d hover-lift border-0 shadow-lg">
           <CardContent className="p-12 text-center">
             <div className="space-y-4">
@@ -310,16 +399,18 @@ const Customers = () => {
               </div>
               <div>
                 <h3 className="text-xl font-heading font-semibold text-gray-900 mb-2">
-                  {searchTerm ? "No customers found" : "No customers yet"}
+                  {searchMode === "aadhar" ? "No customers found" : searchTerm ? "No customers found" : "No customers yet"}
                 </h3>
                 <p className="text-gray-500 text-base mb-6">
-                  {searchTerm 
-                    ? "Try adjusting your search terms or check spelling." 
-                    : "Start building your customer network by adding your first customer."
+                  {searchMode === "aadhar" 
+                    ? "No customers found with this Aadhar number."
+                    : searchTerm 
+                      ? "Try adjusting your search terms or check spelling." 
+                      : "Start building your customer network by adding your first customer."
                   }
                 </p>
               </div>
-              {!searchTerm && (
+              {!searchTerm && searchMode === "my" && (
                 <Button 
                   onClick={() => setIsAddDialogOpen(true)}
                   className="btn-3d bg-gradient-primary hover:shadow-primary px-8 py-3 h-auto"
@@ -333,7 +424,7 @@ const Customers = () => {
         </Card>
       ) : (
         <div className="responsive-grid">
-          {filteredCustomers.map((customer) => (
+          {displayCustomers.map((customer) => (
             <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start">
@@ -351,28 +442,36 @@ const Customers = () => {
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCustomer(customer);
-                      }}
-                    >
-                      <Edit className="h-4 w-4 text-blue-600" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCustomer(customer.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
+                    {isOwner(customer) ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCustomer(customer);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCustomer(customer.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="px-3 py-1 bg-orange-100 text-orange-700 text-xs rounded-lg font-medium">
+                        Read Only
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardHeader>
