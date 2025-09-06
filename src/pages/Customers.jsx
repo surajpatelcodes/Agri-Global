@@ -7,25 +7,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Store, Users, Sparkles, IdCard } from "lucide-react";
+import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, DollarSign, Clock, AlertTriangle } from "lucide-react";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [aadharSearch, setAadharSearch] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [searchMode, setSearchMode] = useState("my"); // "my" or "aadhar"
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [customerTransactions, setCustomerTransactions] = useState({});
   const { toast } = useToast();
 
   useEffect(() => {
     getCurrentUser();
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    if (customers.length > 0) {
+      fetchCustomerTransactions();
+    }
+  }, [customers]);
 
   const getCurrentUser = async () => {
     try {
@@ -60,31 +63,50 @@ const Customers = () => {
     }
   };
 
-  const searchByAadhar = async () => {
-    if (!aadharSearch.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setSearchLoading(true);
+  const fetchCustomerTransactions = async () => {
     try {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .ilike("id_proof", `%${aadharSearch.trim()}%`)
-        .order("created_at", { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Fetch credits and payments for all customers
+      const { data: credits, error: creditsError } = await supabase
+        .from("credits")
+        .select(`
+          *,
+          payments (*)
+        `)
+        .eq("issued_by", user?.id);
 
-      if (error) throw error;
-      setSearchResults(data || []);
-    } catch (error) {
-      console.error("Error searching customers:", error);
-      toast({
-        title: "Error",
-        description: "Failed to search customers",
-        variant: "destructive",
+      if (creditsError) throw creditsError;
+
+      // Calculate transaction summary for each customer
+      const transactionData = {};
+      
+      customers.forEach(customer => {
+        const customerCredits = credits?.filter(credit => credit.customer_id === customer.id) || [];
+        const totalCredit = customerCredits.reduce((sum, credit) => sum + parseFloat(credit.amount || 0), 0);
+        const totalPayments = customerCredits.reduce((sum, credit) => {
+          const creditPayments = credit.payments || [];
+          return sum + creditPayments.reduce((paySum, payment) => paySum + parseFloat(payment.amount || 0), 0);
+        }, 0);
+        
+        const outstanding = totalCredit - totalPayments;
+        let status = 'paid';
+        if (outstanding > 0) status = 'partial';
+        if (totalPayments === 0 && totalCredit > 0) status = 'pending';
+        if (outstanding > totalCredit * 0.8) status = 'defaulter';
+        
+        transactionData[customer.id] = {
+          totalCredit,
+          totalPayments,
+          outstanding,
+          status,
+          credits: customerCredits
+        };
       });
-    } finally {
-      setSearchLoading(false);
+
+      setCustomerTransactions(transactionData);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
     }
   };
 
@@ -111,7 +133,7 @@ const Customers = () => {
 
       toast({
         title: "Success!",
-        description: "Customer added successfully to the network",
+        description: "Customer added successfully",
       });
 
       setIsAddDialogOpen(false);
@@ -195,8 +217,25 @@ const Customers = () => {
     customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const displayCustomers = searchMode === "my" ? filteredCustomers : searchResults;
-  const isOwner = (customer) => customer.created_by === currentUser?.id;
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'paid': return 'bg-green-100 text-green-700 border-green-200';
+      case 'partial': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'pending': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'defaulter': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'paid': return <DollarSign className="h-3 w-3" />;
+      case 'partial': return <Clock className="h-3 w-3" />;
+      case 'pending': return <CreditCard className="h-3 w-3" />;
+      case 'defaulter': return <AlertTriangle className="h-3 w-3" />;
+      default: return <CreditCard className="h-3 w-3" />;
+    }
+  };
 
   const CustomerForm = ({ customer, onSubmit, title, description }) => (
     <div className="space-y-6">
@@ -295,19 +334,15 @@ const Customers = () => {
               <Users className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-heading font-bold text-gray-900">Customer Network</h1>
-              <p className="text-gray-600 text-lg">Manage customers across all connected shops</p>
+              <h1 className="text-3xl font-heading font-bold text-gray-900">My Customers</h1>
+              <p className="text-gray-600 text-lg">Manage your customers and their transactions</p>
             </div>
           </div>
           
           <div className="flex items-center space-x-4 mt-4">
-            <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-200">
-              <Store className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">Cross-Shop Access</span>
-            </div>
             <div className="flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-xl border border-green-200">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-green-700">{customers.length} Total</span>
+              <span className="text-sm font-medium text-green-700">{customers.length} Customers</span>
             </div>
           </div>
         </div>
@@ -328,7 +363,7 @@ const Customers = () => {
                 Add New Customer
               </DialogTitle>
               <DialogDescription className="text-base">
-                Add a new customer to the cross-shop network. This customer will be visible to all connected shops.
+                Add a new customer to your customer list and manage their transactions.
               </DialogDescription>
             </DialogHeader>
             <CustomerForm onSubmit={handleAddCustomer} />
@@ -336,61 +371,21 @@ const Customers = () => {
         </Dialog>
       </div>
 
-      {/* Search Mode Toggle */}
+      {/* Search Bar */}
       <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-fit">
-          <Button
-            variant={searchMode === "my" ? "default" : "ghost"}
-            onClick={() => setSearchMode("my")}
-            className="rounded-lg px-6 py-2 text-sm font-medium transition-all duration-300"
-          >
-            <User className="h-4 w-4 mr-2" />
-            My Customers
-          </Button>
-          <Button
-            variant={searchMode === "aadhar" ? "default" : "ghost"}
-            onClick={() => setSearchMode("aadhar")}
-            className="rounded-lg px-6 py-2 text-sm font-medium transition-all duration-300"
-          >
-            <IdCard className="h-4 w-4 mr-2" />
-            Aadhar Search
-          </Button>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <Input
+            placeholder="Search customers by name or phone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-12 h-12 border-gray-200 focus:border-green-500 transition-all duration-300 rounded-xl"
+          />
         </div>
-
-        {searchMode === "my" ? (
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input
-              placeholder="Search your customers by name or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-12 h-12 border-gray-200 focus:border-green-500 transition-all duration-300 rounded-xl"
-            />
-          </div>
-        ) : (
-          <div className="flex gap-3 flex-1 max-w-md">
-            <div className="relative flex-1">
-              <IdCard className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input
-                placeholder="Enter Aadhar number to search..."
-                value={aadharSearch}
-                onChange={(e) => setAadharSearch(e.target.value)}
-                className="pl-12 h-12 border-gray-200 focus:border-blue-500 transition-all duration-300 rounded-xl"
-              />
-            </div>
-            <Button
-              onClick={searchByAadhar}
-              disabled={searchLoading}
-              className="btn-3d bg-gradient-to-r from-blue-500 to-blue-600 hover:shadow-lg px-6 h-12"
-            >
-              {searchLoading ? "Searching..." : "Search"}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Customer Grid */}
-      {displayCustomers.length === 0 ? (
+      {filteredCustomers.length === 0 ? (
         <Card className="card-3d hover-lift border-0 shadow-lg">
           <CardContent className="p-12 text-center">
             <div className="space-y-4">
@@ -399,18 +394,16 @@ const Customers = () => {
               </div>
               <div>
                 <h3 className="text-xl font-heading font-semibold text-gray-900 mb-2">
-                  {searchMode === "aadhar" ? "No customers found" : searchTerm ? "No customers found" : "No customers yet"}
+                  {searchTerm ? "No customers found" : "No customers yet"}
                 </h3>
                 <p className="text-gray-500 text-base mb-6">
-                  {searchMode === "aadhar" 
-                    ? "No customers found with this Aadhar number."
-                    : searchTerm 
-                      ? "Try adjusting your search terms or check spelling." 
-                      : "Start building your customer network by adding your first customer."
+                  {searchTerm 
+                    ? "Try adjusting your search terms or check spelling." 
+                    : "Start building your customer network by adding your first customer."
                   }
                 </p>
               </div>
-              {!searchTerm && searchMode === "my" && (
+              {!searchTerm && (
                 <Button 
                   onClick={() => setIsAddDialogOpen(true)}
                   className="btn-3d bg-gradient-primary hover:shadow-primary px-8 py-3 h-auto"
@@ -424,7 +417,15 @@ const Customers = () => {
         </Card>
       ) : (
         <div className="responsive-grid">
-          {displayCustomers.map((customer) => (
+          {filteredCustomers.map((customer) => {
+            const transactions = customerTransactions[customer.id] || { 
+              totalCredit: 0, 
+              totalPayments: 0, 
+              outstanding: 0, 
+              status: 'paid' 
+            };
+            
+            return (
             <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start">
@@ -442,36 +443,28 @@ const Customers = () => {
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                    {isOwner(customer) ? (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingCustomer(customer);
-                          }}
-                        >
-                          <Edit className="h-4 w-4 text-blue-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteCustomer(customer.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="px-3 py-1 bg-orange-100 text-orange-700 text-xs rounded-lg font-medium">
-                        Read Only
-                      </div>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCustomer(customer);
+                      }}
+                    >
+                      <Edit className="h-4 w-4 text-blue-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCustomer(customer.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -511,9 +504,33 @@ const Customers = () => {
                     Added {new Date(customer.created_at).toLocaleDateString('en-IN')}
                   </div>
                 </div>
+
+                {/* Transaction Summary */}
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="text-center p-2 bg-blue-50 rounded-lg">
+                    <div className="text-sm font-semibold text-blue-600">₹{transactions.totalCredit.toFixed(0)}</div>
+                    <div className="text-xs text-blue-500">Total Credit</div>
+                  </div>
+                  <div className="text-center p-2 bg-green-50 rounded-lg">
+                    <div className="text-sm font-semibold text-green-600">₹{transactions.totalPayments.toFixed(0)}</div>
+                    <div className="text-xs text-green-500">Paid</div>
+                  </div>
+                  <div className="text-center p-2 bg-orange-50 rounded-lg">
+                    <div className="text-sm font-semibold text-orange-600">₹{transactions.outstanding.toFixed(0)}</div>
+                    <div className="text-xs text-orange-500">Outstanding</div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between pt-2">
+                  <Badge className={`px-3 py-1 rounded-xl ${getStatusColor(transactions.status)}`}>
+                    {getStatusIcon(transactions.status)}
+                    <span className="ml-1 capitalize">{transactions.status}</span>
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -528,7 +545,7 @@ const Customers = () => {
               Edit Customer
             </DialogTitle>
             <DialogDescription className="text-base">
-              Update customer information in the cross-shop network.
+              Update customer information and manage their transactions.
             </DialogDescription>
           </DialogHeader>
           <CustomerForm customer={editingCustomer} onSubmit={handleEditCustomer} />
