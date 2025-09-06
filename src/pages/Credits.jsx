@@ -1,0 +1,343 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, Search, CreditCard, User, Calendar, DollarSign } from "lucide-react";
+
+const Credits = () => {
+  const [credits, setCredits] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchCredits();
+    fetchCustomers();
+  }, []);
+
+  const fetchCredits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("credits")
+        .select(`
+          *,
+          customers (
+            id,
+            name,
+            phone
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setCredits(data || []);
+    } catch (error) {
+      console.error("Error fetching credits:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch credits",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("id, name")
+        .order("name");
+
+      if (error) throw error;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+    }
+  };
+
+  const handleAddCredit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const creditData = {
+        customer_id: parseInt(formData.get("customer_id")),
+        amount: parseFloat(formData.get("amount")),
+        description: formData.get("description"),
+        issued_by: user?.id,
+        status: "pending"
+      };
+
+      const { error } = await supabase
+        .from("credits")
+        .insert([creditData]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Credit issued successfully",
+      });
+
+      setIsAddDialogOpen(false);
+      fetchCredits();
+      e.target.reset();
+    } catch (error) {
+      console.error("Error adding credit:", error);
+      toast({
+        title: "Error",
+        description: "Failed to issue credit",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStatusChange = async (creditId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from("credits")
+        .update({ status: newStatus })
+        .eq("id", creditId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Credit status updated successfully",
+      });
+
+      fetchCredits();
+    } catch (error) {
+      console.error("Error updating credit status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update credit status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      case "paid":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-IN');
+  };
+
+  const filteredCredits = credits.filter(credit =>
+    credit.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    credit.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Credits</h1>
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse space-y-3">
+                  <div className="h-4 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Credits</h1>
+          <p className="text-gray-600">Manage credit transactions</p>
+        </div>
+        
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Issue Credit
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Issue New Credit</DialogTitle>
+              <DialogDescription>
+                Fill in the credit details below.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddCredit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer_id">Customer</Label>
+                <Select name="customer_id" required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount (₹)</Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Enter amount"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  placeholder="Enter credit description"
+                  rows={3}
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Issue Credit
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Search className="h-4 w-4 text-gray-500" />
+        <Input
+          placeholder="Search credits..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
+      {filteredCredits.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No credits found</h3>
+            <p className="text-gray-500 mb-4">
+              {searchTerm ? "No credits match your search." : "Start by issuing your first credit."}
+            </p>
+            {!searchTerm && (
+              <Button onClick={() => setIsAddDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Issue Credit
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredCredits.map((credit) => (
+            <Card key={credit.id} className="hover:shadow-lg transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="flex items-center space-x-2">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span className="font-semibold">{credit.customers?.name}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <DollarSign className="h-4 w-4 text-gray-500" />
+                        <span className="font-bold text-lg">
+                          {formatCurrency(credit.amount)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {credit.description && (
+                      <p className="text-gray-600 mb-3">{credit.description}</p>
+                    )}
+                    
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formatDate(credit.created_at)}</span>
+                      </div>
+                      <span>ID: #{credit.id}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <Badge className={getStatusColor(credit.status)}>
+                      {credit.status.charAt(0).toUpperCase() + credit.status.slice(1)}
+                    </Badge>
+                    
+                    <Select
+                      value={credit.status}
+                      onValueChange={(value) => handleStatusChange(credit.id, value)}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Credits;
