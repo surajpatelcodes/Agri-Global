@@ -5,7 +5,8 @@ import Dashboard from "./Dashboard";
 import Customers from "./Customers";
 import Credits from "./Credits";
 import Payments from "./Payments";
-import Outstanding from "./Outstanding";
+import GlobalSearch from "./GlobalSearch";
+import Profile from "./Profile";
 import Auth from "./Auth";
 
 const Index = () => {
@@ -53,8 +54,10 @@ const Index = () => {
         return <Credits />;
       case "payments":
         return <Payments />;
-      case "outstanding":
-        return <Outstanding />;
+      case "global-search":
+        return <GlobalSearch />;
+      case "profile":
+        return <Profile />;
       default:
         return <Dashboard />;
     }

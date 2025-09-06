@@ -13,7 +13,8 @@ import {
   LogOut,
   Leaf,
   Network,
-  Sparkles
+  Sparkles,
+  User
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -67,11 +68,18 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
       bgColor: "bg-orange-100",
     },
     {
-      id: "outstanding",
-      label: "Outstanding",
+      id: "global-search",
+      label: "Global Search",
       icon: BarChart3,
       color: "text-red-600",
       bgColor: "bg-red-100",
+    },
+    {
+      id: "profile",
+      label: "Profile",
+      icon: User,
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-100",
     },
   ];
 
