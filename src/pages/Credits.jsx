@@ -8,8 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CreditCard, User, Calendar, DollarSign } from "lucide-react";
+import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const Credits = () => {
   const [credits, setCredits] = useState([]);
@@ -17,6 +21,9 @@ const Credits = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isPartialPaymentDialogOpen, setIsPartialPaymentDialogOpen] = useState(false);
+  const [selectedCreditForPartial, setSelectedCreditForPartial] = useState(null);
+  const [partialPaymentDate, setPartialPaymentDate] = useState(new Date());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -113,6 +120,14 @@ const Credits = () => {
   };
 
   const handleStatusChange = async (creditId, newStatus) => {
+    if (newStatus === "partial") {
+      // Open partial payment dialog instead of directly updating status
+      const credit = credits.find(c => c.id === creditId);
+      setSelectedCreditForPartial(credit);
+      setIsPartialPaymentDialogOpen(true);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("credits")
@@ -132,6 +147,54 @@ const Credits = () => {
       toast({
         title: "Error",
         description: "Failed to update credit status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePartialPayment = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const partialAmount = parseFloat(formData.get("partial_amount"));
+      
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert([{
+          credit_id: selectedCreditForPartial.id,
+          amount: partialAmount,
+          payment_date: format(partialPaymentDate, "yyyy-MM-dd"),
+          payment_method: formData.get("payment_method") || "cash",
+          created_by: user?.id
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      // Update credit status to partial
+      const { error: statusError } = await supabase
+        .from("credits")
+        .update({ status: "partial" })
+        .eq("id", selectedCreditForPartial.id);
+
+      if (statusError) throw statusError;
+
+      toast({
+        title: "Success",
+        description: "Partial payment recorded successfully",
+      });
+
+      setIsPartialPaymentDialogOpen(false);
+      setSelectedCreditForPartial(null);
+      fetchCredits();
+      e.target.reset();
+    } catch (error) {
+      console.error("Error recording partial payment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to record partial payment",
         variant: "destructive",
       });
     }
@@ -310,7 +373,7 @@ const Credits = () => {
                     
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <div className="flex items-center space-x-1">
-                        <Calendar className="h-4 w-4" />
+                        <CalendarIcon className="h-4 w-4" />
                         <span>{formatDate(credit.created_at)}</span>
                       </div>
                       <span>ID: #{credit.id}</span>
@@ -343,6 +406,94 @@ const Credits = () => {
           ))}
         </div>
       )}
+
+      {/* Partial Payment Dialog */}
+      <Dialog open={isPartialPaymentDialogOpen} onOpenChange={setIsPartialPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Partial Payment</DialogTitle>
+            <DialogDescription>
+              Enter the partial payment details for {selectedCreditForPartial?.customers?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePartialPayment} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Credit Amount</Label>
+              <div className="p-3 bg-gray-50 rounded-md">
+                <span className="font-semibold text-lg">
+                  {selectedCreditForPartial && formatCurrency(selectedCreditForPartial.amount)}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="partial_amount">Partial Payment Amount (₹)</Label>
+              <Input
+                id="partial_amount"
+                name="partial_amount"
+                type="number"
+                step="0.01"
+                min="0"
+                max={selectedCreditForPartial?.amount}
+                placeholder="Enter partial payment amount"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !partialPaymentDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {partialPaymentDate ? format(partialPaymentDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={partialPaymentDate}
+                    onSelect={setPartialPaymentDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment_method">Payment Method</Label>
+              <Select name="payment_method" defaultValue="cash">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3">
+              <Button type="submit" className="flex-1">
+                Record Payment
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsPartialPaymentDialogOpen(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
