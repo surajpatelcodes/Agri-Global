@@ -386,11 +386,12 @@ const Credits = () => {
                     </Badge>
                     
                     <Select
+                      key={`status-${credit.id}-${credit.status}`}
                       value={credit.status}
                       onValueChange={(value) => handleStatusChange(credit.id, value)}
                     >
                       <SelectTrigger className="w-32">
-                        <SelectValue />
+                        <SelectValue placeholder="Update status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Pending</SelectItem>
