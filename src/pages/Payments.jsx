@@ -3,15 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, DollarSign, User, Calendar, CreditCard } from "lucide-react";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 const Payments = () => {
   const [payments, setPayments] = useState([]);
-  const [credits, setCredits] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -19,11 +20,12 @@ const Payments = () => {
 
   useEffect(() => {
     fetchPayments();
-    fetchCredits();
+    fetchCustomersWithCredit();
   }, []);
 
   const fetchPayments = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("payments")
         .select(`
@@ -35,14 +37,17 @@ const Payments = () => {
             customers (
               id,
               name,
-              phone
+              phone,
+              created_by
             )
           )
         `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPayments(data || []);
+      // Only show payments where the customer was added by the logged-in user
+      const filtered = (data || []).filter(payment => payment.credits?.customers?.created_by === user?.id);
+      setPayments(filtered);
     } catch (error) {
       console.error("Error fetching payments:", error);
       toast({
@@ -55,55 +60,61 @@ const Payments = () => {
     }
   };
 
-  const fetchCredits = async () => {
+  // Fetch only customers added by user who have taken credit
+  const fetchCustomersWithCredit = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      // Get all customers added by user
+      const { data: customers, error: custError } = await supabase
+        .from("customers")
+        .select("id, name, phone")
+        .eq("created_by", user?.id);
+      if (custError) throw custError;
+      // Get credits for those customers
+      const { data: credits, error: credError } = await supabase
         .from("credits")
-        .select(`
-          id,
-          amount,
-          description,
-          customers (
-            id,
-            name
-          )
-        `)
-        .eq("status", "approved")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setCredits(data || []);
+        .select("customer_id")
+        .eq("issued_by", user?.id);
+      if (credError) throw credError;
+      const creditedCustomerIds = new Set((credits || []).map(c => c.customer_id));
+      const filtered = (customers || []).filter(c => creditedCustomerIds.has(c.id));
+      setCustomers(filtered);
     } catch (error) {
-      console.error("Error fetching credits:", error);
+      console.error("Error fetching customers with credit:", error);
+      setCustomers([]);
     }
   };
 
   const handleAddPayment = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+      // Find the latest credit for the selected customer
+      const customerId = parseInt(formData.get("customer_id"));
+      const { data: credits } = await supabase
+        .from("credits")
+        .select("id")
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const creditId = credits?.[0]?.id;
+      if (!creditId) throw new Error("No credit found for this customer");
       const paymentData = {
-        credit_id: parseInt(formData.get("credit_id")),
+        credit_id: creditId,
         amount: parseFloat(formData.get("amount")),
         payment_method: formData.get("payment_method"),
         payment_date: formData.get("payment_date"),
         created_by: user?.id,
       };
-
       const { error } = await supabase
         .from("payments")
         .insert([paymentData]);
-
       if (error) throw error;
-
       toast({
         title: "Success",
         description: "Payment recorded successfully",
       });
-
       setIsAddDialogOpen(false);
       fetchPayments();
       e.target.reset();
@@ -180,20 +191,29 @@ const Payments = () => {
             </DialogHeader>
             <form onSubmit={handleAddPayment} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="credit_id">Credit</Label>
-                <Select name="credit_id" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select credit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {credits.map((credit) => (
-                      <SelectItem key={credit.id} value={credit.id.toString()}>
-                        {credit.customers?.name} - {formatCurrency(credit.amount)}
-                        {credit.description && ` (${credit.description})`}
-                      </SelectItem>
+                <Label htmlFor="customer_id">Customer</Label>
+                <Input
+                  type="text"
+                  placeholder="Search customer..."
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  className="mb-2"
+                />
+                <select name="customer_id" required className="w-full p-2 border rounded">
+                  <option value="">Select customer</option>
+                  {(Array.isArray(customers) ? customers : [])
+                    .filter(c => {
+                      if (!c) return false;
+                      const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(customerSearch.toLowerCase());
+                      const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(customerSearch.toLowerCase());
+                      return nameMatch || phoneMatch;
+                    })
+                    .map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name} {customer.phone ? `(${customer.phone})` : ""}
+                      </option>
                     ))}
-                  </SelectContent>
-                </Select>
+                </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (₹)</Label>

@@ -20,8 +20,25 @@ const Customers = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    let creditsSubscription;
     getCurrentUser();
     fetchCustomers();
+
+    // Subscribe to real-time changes in credits table
+    creditsSubscription = supabase
+      .channel('credits-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'credits',
+      }, (payload) => {
+        fetchCustomerTransactions();
+      })
+      .subscribe();
+
+    return () => {
+      if (creditsSubscription) supabase.removeChannel(creditsSubscription);
+    };
   }, []);
 
   useEffect(() => {

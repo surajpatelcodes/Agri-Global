@@ -25,10 +25,31 @@ const Credits = () => {
   const [selectedCreditForPartial, setSelectedCreditForPartial] = useState(null);
   const [partialPaymentDate, setPartialPaymentDate] = useState(new Date());
   const { toast } = useToast();
-
   useEffect(() => {
+    let creditsSubscription;
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id);
+    };
+    fetchUser();
     fetchCredits();
     fetchCustomers();
+
+    // Subscribe to real-time changes in credits table
+    creditsSubscription = supabase
+      .channel('credits-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'credits',
+      }, (payload) => {
+        fetchCredits();
+      })
+      .subscribe();
+
+    return () => {
+      if (creditsSubscription) supabase.removeChannel(creditsSubscription);
+    };
   }, []);
 
   const fetchCredits = async () => {
