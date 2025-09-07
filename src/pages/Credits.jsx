@@ -24,6 +24,9 @@ const Credits = () => {
   const [isPartialPaymentDialogOpen, setIsPartialPaymentDialogOpen] = useState(false);
   const [selectedCreditForPartial, setSelectedCreditForPartial] = useState(null);
   const [partialPaymentDate, setPartialPaymentDate] = useState(new Date());
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [userId, setUserId] = useState("");
   const { toast } = useToast();
   useEffect(() => {
     let creditsSubscription;
@@ -90,7 +93,7 @@ const Credits = () => {
       
       const { data, error } = await supabase
         .from("customers")
-        .select("id, name")
+        .select("id, name, id_proof")
         .eq("created_by", user?.id)
         .order("name");
 
@@ -300,16 +303,36 @@ const Credits = () => {
             <form onSubmit={handleAddCredit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Customer</Label>
-                <Select name="customer_id" required>
-                  <SelectTrigger>
+                <Select name="customer_id" required value={String(selectedCustomerId)} onValueChange={val => setSelectedCustomerId(val)}>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id.toString()}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-60 overflow-y-auto">
+                    <div className="px-2 py-2 sticky top-0 bg-white z-10">
+                      <Input
+                        type="text"
+                        placeholder="Search customer..."
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        className="w-full border rounded px-2 py-1"
+                        autoFocus
+                      />
+                    </div>
+                    {(Array.isArray(customers) ? customers : [])
+                      .filter(c => {
+                        if (!c) return false;
+                        const search = customerSearch.toLowerCase();
+                        if (!search) return true;
+                        const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(search);
+                        const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(search);
+                        const aadharMatch = typeof c.id_proof === 'string' && c.id_proof.slice(-4).includes(search);
+                        return nameMatch || phoneMatch || aadharMatch;
+                      })
+                      .map((customer) => (
+                        <SelectItem key={customer.id} value={String(customer.id)}>
+                          {customer.name} {customer.id_proof ? `• Aadhaar: ${customer.id_proof}` : ""}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

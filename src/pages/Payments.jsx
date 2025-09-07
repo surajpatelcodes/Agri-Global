@@ -13,6 +13,7 @@ const Payments = () => {
   const [payments, setPayments] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -192,8 +193,7 @@ const Payments = () => {
             <form onSubmit={handleAddPayment} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Customer</Label>
-                <Select name="customer_id" required value={String(customerSearch)} onValueChange={val => setCustomerSearch(val)}>
-                  
+                <Select name="customer_id" required value={String(selectedCustomerId)} onValueChange={val => setSelectedCustomerId(val)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
@@ -202,7 +202,7 @@ const Payments = () => {
                       <Input
                         type="text"
                         placeholder="Search customer..."
-                        value={customerSearch && isNaN(Number(customerSearch)) ? customerSearch : ''}
+                        value={customerSearch}
                         onChange={e => setCustomerSearch(e.target.value)}
                         className="w-full border rounded px-2 py-1"
                         autoFocus
@@ -211,15 +211,16 @@ const Payments = () => {
                     {(Array.isArray(customers) ? customers : [])
                       .filter(c => {
                         if (!c) return false;
-                        const search = customerSearch && isNaN(Number(customerSearch)) ? customerSearch.toLowerCase() : '';
+                        const search = customerSearch.toLowerCase();
                         if (!search) return true;
                         const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(search);
                         const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(search);
-                        return nameMatch || phoneMatch;
+                        const aadharMatch = typeof c.id_proof === 'string' && c.id_proof.slice(-4).includes(search);
+                        return nameMatch || phoneMatch || aadharMatch;
                       })
                       .map((customer) => (
                         <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name} {customer.phone ? `(${customer.phone})` : ""}
+                          {customer.name} {customer.phone ? `(${customer.phone})` : ""} {customer.id_proof ? `• Aadhaar: **** **** ${customer.id_proof.slice(-4)}` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>
