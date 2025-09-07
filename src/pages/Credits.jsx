@@ -26,16 +26,20 @@ const Credits = () => {
 
   const fetchCredits = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data, error } = await supabase
         .from("credits")
         .select(`
           *,
-          customers (
+          customers!inner (
             id,
             name,
-            phone
+            phone,
+            created_by
           )
         `)
+        .eq("customers.created_by", user?.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -54,9 +58,12 @@ const Credits = () => {
 
   const fetchCustomers = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data, error } = await supabase
         .from("customers")
         .select("id, name")
+        .eq("created_by", user?.id)
         .order("name");
 
       if (error) throw error;
@@ -134,12 +141,12 @@ const Credits = () => {
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "approved":
-        return "bg-green-100 text-green-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
+      case "partial":
+        return "bg-orange-100 text-orange-800";
       case "paid":
-        return "bg-blue-100 text-blue-800";
+        return "bg-green-100 text-green-800";
+      case "defaulter":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -324,9 +331,9 @@ const Credits = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="partial">Partial</SelectItem>
                         <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="defaulter">Defaulter</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
