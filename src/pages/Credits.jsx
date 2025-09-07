@@ -330,7 +330,7 @@ const Credits = () => {
                       })
                       .map((customer) => (
                         <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name} {customer.id_proof ? `• Aadhaar: ${customer.id_proof}` : ""}
+                          {customer.name} {customer.id_proof ? `•Aadhar ${customer.id_proof}` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>

@@ -220,7 +220,7 @@ const Payments = () => {
                       })
                       .map((customer) => (
                         <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name} {customer.phone ? `(${customer.phone})` : ""} {customer.id_proof ? `• Aadhaar: **** **** ${customer.id_proof.slice(-4)}` : ""}
+                          {customer.name} {customer.phone ? `📞${customer.phone}` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>
