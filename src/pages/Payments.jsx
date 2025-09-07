@@ -192,28 +192,38 @@ const Payments = () => {
             <form onSubmit={handleAddPayment} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Customer</Label>
-                <Input
-                  type="text"
-                  placeholder="Search customer..."
-                  value={customerSearch}
-                  onChange={e => setCustomerSearch(e.target.value)}
-                  className="mb-2"
-                />
-                <select name="customer_id" required className="w-full p-2 border rounded">
-                  <option value="">Select customer</option>
-                  {(Array.isArray(customers) ? customers : [])
-                    .filter(c => {
-                      if (!c) return false;
-                      const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(customerSearch.toLowerCase());
-                      const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(customerSearch.toLowerCase());
-                      return nameMatch || phoneMatch;
-                    })
-                    .map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} {customer.phone ? `(${customer.phone})` : ""}
-                      </option>
-                    ))}
-                </select>
+                <Select name="customer_id" required value={String(customerSearch)} onValueChange={val => setCustomerSearch(val)}>
+                  
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60 overflow-y-auto">
+                    <div className="px-2 py-2 sticky top-0 bg-white z-10">
+                      <Input
+                        type="text"
+                        placeholder="Search customer..."
+                        value={customerSearch && isNaN(Number(customerSearch)) ? customerSearch : ''}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        className="w-full border rounded px-2 py-1"
+                        autoFocus
+                      />
+                    </div>
+                    {(Array.isArray(customers) ? customers : [])
+                      .filter(c => {
+                        if (!c) return false;
+                        const search = customerSearch && isNaN(Number(customerSearch)) ? customerSearch.toLowerCase() : '';
+                        if (!search) return true;
+                        const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(search);
+                        const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(search);
+                        return nameMatch || phoneMatch;
+                      })
+                      .map((customer) => (
+                        <SelectItem key={customer.id} value={String(customer.id)}>
+                          {customer.name} {customer.phone ? `(${customer.phone})` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (₹)</Label>
