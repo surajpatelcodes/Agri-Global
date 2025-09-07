@@ -2,16 +2,19 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, CreditCard, DollarSign, TrendingUp, Plus, Eye, FileText, Calendar, Sparkles } from "lucide-react";
+import { Users, CreditCard, DollarSign, TrendingUp, Plus, Eye, FileText, Calendar, Sparkles, X, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalCredits: 0,
     totalPayments: 0,
-    totalOutstanding: 0,
+    defaultersCount: 0,
   });
+  const [defaulters, setDefaulters] = useState([]);
+  const [showDefaulters, setShowDefaulters] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,47 +28,67 @@ const Dashboard = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      if (user) {
-        // Fetch user profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        
-        setUserProfile(profileData);
-      }
+      if (!user) return;
 
-      // Get total customers
+      // Fetch user profile
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      
+      setUserProfile(profileData);
+
+      // Get total customers created by current user
       const { count: customersCount } = await supabase
         .from("customers")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "exact", head: true })
+        .eq("created_by", user.id);
 
-      // Get total credits amount
+      // Get total credits amount issued by current user
       const { data: creditsData } = await supabase
         .from("credits")
-        .select("amount");
+        .select("amount")
+        .eq("issued_by", user.id);
 
-      // Get total payments amount
+      // Get total payments amount created by current user
       const { data: paymentsData } = await supabase
         .from("payments")
-        .select("amount");
+        .select("amount")
+        .eq("created_by", user.id);
 
-      // Get outstanding balances
-      const { data: outstandingData } = await supabase
-        .from("customer_outstanding")
-        .select("outstanding");
+      // Get defaulters (customers with credits having defaulter status)
+      const { data: defaultersData } = await supabase
+        .from("credits")
+        .select("customers(id, name, phone)")
+        .eq("status", "defaulter")
+        .eq("issued_by", user.id);
 
-      // Get recent activity (latest credits and payments)
+      // Process defaulters to get unique customers
+      const uniqueDefaulters = [];
+      const seenCustomers = new Set();
+      
+      defaultersData?.forEach(credit => {
+        if (credit.customers && !seenCustomers.has(credit.customers.id)) {
+          seenCustomers.add(credit.customers.id);
+          uniqueDefaulters.push(credit.customers);
+        }
+      });
+
+      setDefaulters(uniqueDefaulters);
+
+      // Get recent activity (latest credits and payments by current user)
       const { data: recentCredits } = await supabase
         .from("credits")
         .select("id, amount, created_at, customers(name)")
+        .eq("issued_by", user.id)
         .order("created_at", { ascending: false })
         .limit(3);
 
       const { data: recentPaymentsData } = await supabase
         .from("payments")
         .select("id, amount, created_at, credits(customers(name))")
+        .eq("created_by", user.id)
         .order("created_at", { ascending: false })
         .limit(3);
 
@@ -91,13 +114,12 @@ const Dashboard = () => {
 
       const totalCredits = creditsData?.reduce((sum, credit) => sum + Number(credit.amount), 0) || 0;
       const totalPayments = paymentsData?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-      const totalOutstanding = outstandingData?.reduce((sum, customer) => sum + Number(customer.outstanding), 0) || 0;
 
       setStats({
         totalCustomers: customersCount || 0,
         totalCredits,
         totalPayments,
-        totalOutstanding,
+        defaultersCount: uniqueDefaulters.length,
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -161,12 +183,13 @@ const Dashboard = () => {
       gradient: "from-purple-500 to-purple-600",
     },
     {
-      title: "Total Outstanding",
-      value: formatCurrency(stats.totalOutstanding),
+      title: "Defaulters",
+      value: stats.defaultersCount,
       icon: TrendingUp,
       color: "text-red-600",
       bgColor: "bg-red-100",
       gradient: "from-red-500 to-red-600",
+      onClick: () => setShowDefaulters(true),
     },
   ];
 
@@ -235,7 +258,7 @@ const Dashboard = () => {
                 {getGreeting()}, {userProfile?.full_name || 'Welcome'}!
               </h1>
               <p className="text-green-100 text-lg">
-                {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Cross-Shop Network Active
+                {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Personal Dashboard
               </p>
             </div>
             <div className="text-right">
@@ -260,7 +283,11 @@ const Dashboard = () => {
         {dashboardCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card key={index} className="card-3d hover-glow group cursor-pointer overflow-hidden border-0 shadow-lg">
+            <Card 
+              key={index} 
+              className="card-3d hover-glow group cursor-pointer overflow-hidden border-0 shadow-lg"
+              onClick={card.onClick}
+            >
               <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
                 <CardTitle className="text-sm font-medium text-gray-600">
@@ -276,7 +303,7 @@ const Dashboard = () => {
                 </div>
                 <div className="flex items-center text-xs text-gray-500">
                   <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-                  <span>Cross-shop data</span>
+                  <span>Your data</span>
                 </div>
               </CardContent>
             </Card>
@@ -295,7 +322,7 @@ const Dashboard = () => {
               </div>
               Recent Activity
             </CardTitle>
-            <CardDescription>Latest transactions across all shops</CardDescription>
+            <CardDescription>Your latest transactions</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -362,6 +389,33 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Defaulters Dialog */}
+      <Dialog open={showDefaulters} onOpenChange={setShowDefaulters}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Defaulters
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {defaulters.length > 0 ? (
+              defaulters.map((customer) => (
+                <div key={customer.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="font-medium text-gray-900">{customer.name}</div>
+                  <div className="text-sm text-gray-600">{customer.phone}</div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-gray-500">
+                <AlertTriangle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No defaulters found</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
