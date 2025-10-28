@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      credit_check_logs: {
+        Row: {
+          checked_aadhar: string
+          checked_at: string | null
+          checked_by: string
+          id: string
+          shop_id: string | null
+        }
+        Insert: {
+          checked_aadhar: string
+          checked_at?: string | null
+          checked_by: string
+          id?: string
+          shop_id?: string | null
+        }
+        Update: {
+          checked_aadhar?: string
+          checked_at?: string | null
+          checked_by?: string
+          id?: string
+          shop_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_check_logs_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credits: {
         Row: {
           amount: number
@@ -239,6 +271,30 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       customer_outstanding: {
@@ -270,8 +326,18 @@ export type Database = {
       }
     }
     Functions: {
+      check_customer_credit_status: {
+        Args: { _aadhar_number: string }
+        Returns: {
+          has_credit: boolean
+          is_defaulter: boolean
+          outstanding_range: string
+          risk_level: string
+          total_shops: number
+        }[]
+      }
       get_customer_outstanding: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           customer_id: number
           name: string
@@ -281,9 +347,16 @@ export type Database = {
           total_payments: number
         }[]
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "shop_owner" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -410,6 +483,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "shop_owner", "user"],
+    },
   },
 } as const

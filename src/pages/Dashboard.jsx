@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalCredits: 0,
@@ -198,28 +200,28 @@ const Dashboard = () => {
       title: "Add Customer",
       description: "Register new customer",
       icon: Users,
-      action: () => {},
+      action: () => navigate('/customers'),
       gradient: "from-blue-500 to-blue-600",
     },
     {
       title: "Issue Credit",
       description: "Create new credit",
       icon: CreditCard,
-      action: () => {},
+      action: () => navigate('/credits'),
       gradient: "from-green-500 to-green-600",
     },
     {
       title: "Record Payment",
       description: "Add new payment",
       icon: DollarSign,
-      action: () => {},
+      action: () => navigate('/payments'),
       gradient: "from-purple-500 to-purple-600",
     },
     {
       title: "View Reports",
       description: "Generate reports",
       icon: FileText,
-      action: () => {},
+      action: () => navigate('/outstanding'),
       gradient: "from-orange-500 to-orange-600",
     },
   ];
