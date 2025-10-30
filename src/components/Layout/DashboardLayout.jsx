@@ -87,7 +87,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 overflow-hidden">
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl transform transition-all duration-300 ease-out lg:translate-x-0 lg:static lg:inset-0",
+        "fixed inset-y-0 left-0 z-50 w-72 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl transform transition-all duration-300 ease-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Header */}
@@ -119,7 +119,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-3 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-3 overflow-y-auto min-h-0">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -172,7 +172,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200/50 bg-gradient-to-r from-gray-50/50 to-gray-100/50">
+        <div className="p-6 border-t border-gray-200/50 bg-gradient-to-r from-gray-50/50 to-gray-100/50 flex-shrink-0">
           <Button
             variant="ghost"
             onClick={handleLogout}
