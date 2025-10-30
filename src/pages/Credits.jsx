@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign } from "lucide-react";
+import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,8 @@ const Credits = () => {
   const [customerSearch, setCustomerSearch] = useState("");
   const [userId, setUserId] = useState("");
   const { toast } = useToast();
+  const navigate = useNavigate();
+  
   useEffect(() => {
     let creditsSubscription;
     const fetchUser = async () => {
@@ -281,9 +284,19 @@ const Credits = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Credits</h1>
-          <p className="text-gray-600">Manage credit transactions</p>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/dashboard')}
+            className="hover:bg-gray-100"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Credits</h1>
+            <p className="text-gray-600">Manage credit transactions</p>
+          </div>
         </div>
         
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

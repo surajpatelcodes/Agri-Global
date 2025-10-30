@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Search, TrendingUp, User, Phone, DollarSign } from "lucide-react";
+import { Search, TrendingUp, User, Phone, DollarSign, ArrowLeft } from "lucide-react";
 
 const Outstanding = () => {
   const [outstandingData, setOutstandingData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchOutstandingData();
@@ -93,9 +96,19 @@ const Outstanding = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Outstanding Balances</h1>
-        <p className="text-gray-600">Track customer outstanding amounts</p>
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/dashboard')}
+          className="hover:bg-gray-100"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Outstanding Balances</h1>
+          <p className="text-gray-600">Track customer outstanding amounts</p>
+        </div>
       </div>
 
       {/* Summary Cards */}

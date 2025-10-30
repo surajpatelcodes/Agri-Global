@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, DollarSign, Clock, AlertTriangle } from "lucide-react";
+import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, DollarSign, Clock, AlertTriangle, ArrowLeft } from "lucide-react";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
@@ -18,6 +19,7 @@ const Customers = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [customerTransactions, setCustomerTransactions] = useState({});
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     let creditsSubscription;
@@ -347,6 +349,14 @@ const Customers = () => {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="space-y-2">
           <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/dashboard')}
+              className="hover:bg-gray-100"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg">
               <Users className="h-6 w-6 text-white" />
             </div>
