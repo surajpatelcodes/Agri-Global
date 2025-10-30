@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardLayout from "@/components/Layout/DashboardLayout";
-import Dashboard from "./Dashboard";
-import Customers from "./Customers";
-import Credits from "./Credits";
-import Payments from "./Payments";
-import GlobalSearch from "./GlobalSearch";
-import Profile from "./Profile";
-import Auth from "./Auth";
+
+const Dashboard = lazy(() => import("./Dashboard"));
+const Customers = lazy(() => import("./Customers"));
+const Credits = lazy(() => import("./Credits"));
+const Payments = lazy(() => import("./Payments"));
+const GlobalSearch = lazy(() => import("./GlobalSearch"));
+const Profile = lazy(() => import("./Profile"));
+const Auth = lazy(() => import("./Auth"));
 
 const Index = () => {
   const [user, setUser] = useState(null);
@@ -29,19 +30,25 @@ const Index = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+  const LoadingSpinner = () => (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
-    );
+    </div>
+  );
+
+  if (loading) {
+    return <LoadingSpinner />;
   }
 
   if (!user) {
-    return <Auth />;
+    return (
+      <Suspense fallback={<LoadingSpinner />}>
+        <Auth />
+      </Suspense>
+    );
   }
 
   const renderContent = () => {
@@ -65,7 +72,9 @@ const Index = () => {
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {renderContent()}
+      <Suspense fallback={<LoadingSpinner />}>
+        {renderContent()}
+      </Suspense>
     </DashboardLayout>
   );
 };
