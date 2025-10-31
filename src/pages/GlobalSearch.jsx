@@ -1,24 +1,57 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, AlertCircle } from "lucide-react";
+import { Search, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const GlobalSearch = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const { toast } = useToast();
 
+  // Debounce the search term for real-time validation
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Validate Aadhar format in real-time
+  const isValidAadhar = useMemo(() => {
+    if (!debouncedSearchTerm) return true; // Don't show error for empty input
+    return /^\d{12}$/.test(debouncedSearchTerm.trim());
+  }, [debouncedSearchTerm]);
+
+  // Update validation error message
+  useMemo(() => {
+    if (!searchTerm) {
+      setValidationError("");
+    } else if (!isValidAadhar) {
+      setValidationError("Aadhar number must be exactly 12 digits");
+    } else {
+      setValidationError("");
+    }
+  }, [searchTerm, isValidAadhar]);
+
   const handleSearch = async () => {
-    if (!searchTerm.trim()) {
+    const trimmedSearch = searchTerm.trim();
+    
+    if (!trimmedSearch) {
       toast({
         title: "Error",
         description: "Please enter an Aadhar card number to search",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isValidAadhar) {
+      toast({
+        title: "Invalid Aadhar Number",
+        description: "Aadhar number must be exactly 12 digits",
         variant: "destructive",
       });
       return;
@@ -31,7 +64,7 @@ const GlobalSearch = () => {
       // Use privacy-preserving credit check function
       const { data, error } = await supabase
         .rpc("check_customer_credit_status", {
-          _aadhar_number: searchTerm.trim()
+          _aadhar_number: trimmedSearch
         });
 
       if (error) {
@@ -48,12 +81,16 @@ const GlobalSearch = () => {
       }
 
       setSearchResult(data[0]);
+      toast({
+        title: "Search Complete",
+        description: "Customer information retrieved successfully",
+      });
 
     } catch (error) {
       console.error("Error searching customer:", error);
       toast({
         title: "Error",
-        description: "Failed to search customer data",
+        description: "Failed to search customer data. Please try again.",
         variant: "destructive",
       });
       setSearchResult(null);
@@ -75,38 +112,66 @@ const GlobalSearch = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Global Customer Search</h1>
         <p className="text-gray-600">Search for any customer using their Aadhar card number</p>
       </div>
 
       {/* Search Section */}
-      <Card>
+      <Card className="border-2 focus-within:border-primary transition-colors">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
+            <Search className="h-5 w-5 text-primary" />
             Search Customer
           </CardTitle>
           <CardDescription>
-            Enter the Aadhar card number to view customer transaction details
+            Enter the 12-digit Aadhar card number to view customer transaction summary
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Enter Aadhar card number..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="text-lg"
-              />
+          <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="space-y-4">
+            <div className="space-y-2">
+              <div className="relative">
+                <Input
+                  placeholder="Enter 12-digit Aadhar number..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 12);
+                    setSearchTerm(value);
+                  }}
+                  maxLength={12}
+                  className={`text-lg h-12 pr-10 ${
+                    searchTerm && (isValidAadhar ? 'border-green-500' : 'border-destructive')
+                  }`}
+                  aria-label="Aadhar number input"
+                  aria-invalid={!!validationError}
+                  aria-describedby={validationError ? "aadhar-error" : undefined}
+                />
+                {searchTerm && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {isValidAadhar ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </div>
+                )}
+              </div>
+              {validationError && (
+                <p id="aadhar-error" className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {validationError}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {searchTerm.length}/12 digits entered
+              </p>
             </div>
             <Button 
-              onClick={handleSearch}
-              disabled={loading}
-              className="min-w-[120px]"
+              type="submit"
+              disabled={loading || !isValidAadhar}
+              className="w-full h-11 font-semibold"
             >
               {loading ? (
                 <>
@@ -116,11 +181,11 @@ const GlobalSearch = () => {
               ) : (
                 <>
                   <Search className="mr-2 h-4 w-4" />
-                  Search
+                  Search Customer
                 </>
               )}
             </Button>
-          </div>
+          </form>
         </CardContent>
       </Card>
 

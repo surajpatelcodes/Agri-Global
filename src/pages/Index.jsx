@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardLayout from "@/components/Layout/DashboardLayout";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 const Dashboard = lazy(() => import("./Dashboard"));
 const Customers = lazy(() => import("./Customers"));
@@ -30,22 +31,19 @@ const Index = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const LoadingSpinner = () => (
+  const FullPageLoader = () => (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
+      <LoadingSpinner text="Loading..." />
     </div>
   );
 
   if (loading) {
-    return <LoadingSpinner />;
+    return <FullPageLoader />;
   }
 
   if (!user) {
     return (
-      <Suspense fallback={<LoadingSpinner />}>
+      <Suspense fallback={<FullPageLoader />}>
         <Auth />
       </Suspense>
     );
@@ -72,7 +70,7 @@ const Index = () => {
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      <Suspense fallback={<LoadingSpinner />}>
+      <Suspense fallback={<div className="flex items-center justify-center h-full"><LoadingSpinner /></div>}>
         {renderContent()}
       </Suspense>
     </DashboardLayout>
