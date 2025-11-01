@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Users, CreditCard, DollarSign, TrendingUp, Plus, Eye, FileText, Calendar, Sparkles, X, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AnimatedCard from "@/components/AnimatedCard";
+import { SkeletonGrid } from "@/components/SkeletonCard";
+import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
 
-const Dashboard = () => {
+const Dashboard = memo(() => {
+  usePerformanceMonitor('Dashboard');
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -228,41 +232,37 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 animate-fade-in" role="status" aria-live="polite" aria-label="Loading dashboard">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded mb-2 w-1/3"></div>
-          <div className="h-4 bg-gray-200 rounded mb-6 w-1/2"></div>
+          <div className="h-8 bg-muted rounded mb-2 w-1/3" />
+          <div className="h-4 bg-muted rounded mb-6 w-1/2" />
         </div>
-        <div className="responsive-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-8 bg-gray-200 rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <SkeletonGrid count={4} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in" role="main" aria-label="Dashboard">
       {/* Welcome Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 p-8 text-white">
-        <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-transparent"></div>
-        <div className="relative z-10">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
-                <Sparkles className="h-8 w-8 text-yellow-300" />
-                {getGreeting()}, {userProfile?.full_name || 'Welcome'}!
-              </h1>
-              <p className="text-green-100 text-lg">
-                {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Personal Dashboard
-              </p>
-            </div>
+      <AnimatedCard animation="fade-in">
+        <section 
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 p-8 text-white"
+          role="banner"
+          aria-label="Welcome section"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-transparent" aria-hidden="true" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
+                  <Sparkles className="h-8 w-8 text-yellow-300" aria-hidden="true" />
+                  <span>{getGreeting()}, {userProfile?.full_name || 'Welcome'}!</span>
+                </h1>
+                <p className="text-green-100 text-lg">
+                  {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Personal Dashboard
+                </p>
+              </div>
             <div className="text-right">
               <div className="text-sm text-green-200 mb-1">Today</div>
               <div className="text-2xl font-bold">
@@ -275,21 +275,32 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-        <div className="absolute top-4 right-4 opacity-10">
-          <Calendar className="h-24 w-24" />
-        </div>
-      </div>
+          <div className="absolute top-4 right-4 opacity-10" aria-hidden="true">
+            <Calendar className="h-24 w-24" />
+          </div>
+        </section>
+      </AnimatedCard>
 
       {/* Stats Cards */}
-      <div className="responsive-grid">
-        {dashboardCards.map((card, index) => {
-          const Icon = card.icon;
-          return (
-            <Card 
-              key={index} 
-              className="card-3d hover-glow group cursor-pointer overflow-hidden border-0 shadow-lg"
-              onClick={card.onClick}
-            >
+      <section aria-label="Statistics overview">
+        <div className="responsive-grid">
+          {dashboardCards.map((card, index) => {
+            const Icon = card.icon;
+            return (
+              <AnimatedCard key={index} delay={index * 100} animation="scale-in">
+                <Card 
+                  className="card-3d hover-glow group cursor-pointer overflow-hidden border-0 shadow-lg"
+                  onClick={card.onClick}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${card.title}: ${card.value}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      card.onClick?.();
+                    }
+                  }}
+                >
               <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
                 <CardTitle className="text-sm font-medium text-gray-600">
@@ -307,25 +318,28 @@ const Dashboard = () => {
                   <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
                   <span>Your data</span>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            </AnimatedCard>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Recent Activity & Quick Actions */}
       <div className="responsive-grid-2">
         {/* Recent Activity */}
-        <Card className="card-3d hover-lift">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-green-600" />
-              </div>
-              Recent Activity
-            </CardTitle>
-            <CardDescription>Your latest transactions</CardDescription>
-          </CardHeader>
+        <AnimatedCard animation="slide-right" delay={200}>
+          <Card className="card-3d hover-lift">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="p-2 bg-green-100 rounded-lg" aria-hidden="true">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                Recent Activity
+              </CardTitle>
+              <CardDescription>Your latest transactions</CardDescription>
+            </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
@@ -351,21 +365,23 @@ const Dashboard = () => {
                   <p>No recent activity</p>
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </AnimatedCard>
 
         {/* Quick Actions */}
-        <Card className="card-3d hover-lift">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Plus className="h-5 w-5 text-purple-600" />
-              </div>
-              Quick Actions
-            </CardTitle>
-            <CardDescription>Common tasks and shortcuts</CardDescription>
-          </CardHeader>
+        <AnimatedCard animation="slide-left" delay={200}>
+          <Card className="card-3d hover-lift">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="p-2 bg-purple-100 rounded-lg" aria-hidden="true">
+                  <Plus className="h-5 w-5 text-purple-600" />
+                </div>
+                Quick Actions
+              </CardTitle>
+              <CardDescription>Common tasks and shortcuts</CardDescription>
+            </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
               {quickActions.map((action, index) => {
@@ -387,17 +403,23 @@ const Dashboard = () => {
                   </Button>
                 );
               })}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </AnimatedCard>
       </div>
 
       {/* Defaulters Dialog */}
       <Dialog open={showDefaulters} onOpenChange={setShowDefaulters}>
-        <DialogContent className="max-w-md">
+        <DialogContent 
+          className="max-w-md"
+          role="dialog"
+          aria-labelledby="defaulters-dialog-title"
+          aria-describedby="defaulters-dialog-description"
+        >
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
+            <DialogTitle id="defaulters-dialog-title" className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />
               Defaulters
             </DialogTitle>
           </DialogHeader>
@@ -420,6 +442,8 @@ const Dashboard = () => {
       </Dialog>
     </div>
   );
-};
+});
+
+Dashboard.displayName = 'Dashboard';
 
 export default Dashboard;

@@ -1,0 +1,32 @@
+{
+  "name": "A.I.A.D.A - Agriculture Project Manager",
+  "short_name": "A.I.A.D.A",
+  "description": "Cross Shop Agriculture Project Manager for customer credit and payment management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#22c55e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "lang": "en-IN",
+  "dir": "ltr"
+}
