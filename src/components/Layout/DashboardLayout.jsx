@@ -127,7 +127,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-3 overflow-y-auto min-h-0">
+        <nav className="flex-1 px-4 py-6 space-y-3 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -235,9 +235,9 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
         </header>
 
         {/* Main content area */}
-        <main id="main-content" className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
-          <div className="p-4 lg:p-8 h-full">
-            <div className="max-w-7xl mx-auto h-full">
+        <main id="main-content" className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400">
+          <div className="p-4 lg:p-8">
+            <div className="max-w-7xl mx-auto">
               {children}
             </div>
           </div>
