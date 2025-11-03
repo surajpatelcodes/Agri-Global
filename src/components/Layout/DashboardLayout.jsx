@@ -227,7 +227,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
         </header>
 
         {/* Main content area */}
-        <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
+        <main id="main-content" className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
           <div className="p-4 lg:p-8 h-full">
             <div className="max-w-7xl mx-auto h-full">
               {children}
