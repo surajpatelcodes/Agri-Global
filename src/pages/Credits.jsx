@@ -288,7 +288,7 @@ const Credits = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/#dashboard')}
             className="hover:bg-gray-100"
           >
             <ArrowLeft className="h-5 w-5" />

@@ -14,7 +14,8 @@ import {
   Leaf,
   Network,
   Sparkles,
-  User
+  User,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -68,11 +69,18 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
       bgColor: "bg-orange-100",
     },
     {
+      id: "outstanding",
+      label: "Outstanding",
+      icon: TrendingUp,
+      color: "text-red-600",
+      bgColor: "bg-red-100",
+    },
+    {
       id: "global-search",
       label: "Global Search",
       icon: BarChart3,
-      color: "text-red-600",
-      bgColor: "bg-red-100",
+      color: "text-teal-600",
+      bgColor: "bg-teal-100",
     },
     {
       id: "profile",

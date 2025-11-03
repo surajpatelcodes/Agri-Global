@@ -8,6 +8,7 @@ const Dashboard = lazy(() => import("./Dashboard"));
 const Customers = lazy(() => import("./Customers"));
 const Credits = lazy(() => import("./Credits"));
 const Payments = lazy(() => import("./Payments"));
+const Outstanding = lazy(() => import("./Outstanding"));
 const GlobalSearch = lazy(() => import("./GlobalSearch"));
 const Profile = lazy(() => import("./Profile"));
 const Auth = lazy(() => import("./Auth"));
@@ -19,25 +20,18 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // Sync activeTab with current route
+  // Sync activeTab with URL hash for navigation
   useEffect(() => {
-    const path = location.pathname;
-    const routeToTab = {
-      '/': 'dashboard',
-      '/dashboard': 'dashboard',
-      '/customers': 'customers',
-      '/credits': 'credits',
-      '/payments': 'payments',
-      '/outstanding': 'outstanding',
-      '/profile': 'profile',
-      '/global-search': 'global-search'
-    };
-    
-    const newTab = routeToTab[path] || 'dashboard';
-    if (newTab !== activeTab) {
-      setActiveTab(newTab);
+    const hash = location.hash.replace('#', '') || 'dashboard';
+    if (hash !== activeTab && ['dashboard', 'customers', 'credits', 'payments', 'outstanding', 'profile', 'global-search'].includes(hash)) {
+      setActiveTab(hash);
     }
-  }, [location.pathname]);
+    
+    // Set default hash if none present
+    if (!location.hash) {
+      navigate('/#dashboard', { replace: true });
+    }
+  }, [location.hash, navigate]);
 
   useEffect(() => {
     // Get initial session
@@ -82,6 +76,8 @@ const Index = () => {
         return <Credits />;
       case "payments":
         return <Payments />;
+      case "outstanding":
+        return <Outstanding />;
       case "global-search":
         return <GlobalSearch />;
       case "profile":
@@ -93,16 +89,8 @@ const Index = () => {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    const tabToRoute = {
-      'dashboard': '/',
-      'customers': '/customers',
-      'credits': '/credits',
-      'payments': '/payments',
-      'outstanding': '/outstanding',
-      'profile': '/profile',
-      'global-search': '/global-search'
-    };
-    navigate(tabToRoute[tab] || '/');
+    // Use hash navigation to keep everything in the same route
+    navigate(`/#${tab}`, { replace: false });
   };
 
   return (
