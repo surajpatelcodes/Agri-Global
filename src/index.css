@@ -258,11 +258,13 @@ All colors MUST be HSL.
   
   /* Responsive Grid */
   .responsive-grid {
-    @apply grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+    @apply grid gap-4 md:gap-6;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   }
   
   .responsive-grid-2 {
-    @apply grid gap-6 grid-cols-1 lg:grid-cols-2;
+    @apply grid gap-4 md:gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   }
   
   /* Smooth Hover Effects */
@@ -317,9 +319,9 @@ All colors MUST be HSL.
   }
 
   /* Mobile optimization */
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     .responsive-grid {
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: 1fr;
       gap: 1rem;
     }
     

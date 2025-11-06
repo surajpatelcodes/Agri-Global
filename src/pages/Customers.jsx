@@ -434,23 +434,23 @@ const Customers = () => {
             };
             
             return (
-            <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-start space-x-3">
-                    <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                      <User className="h-6 w-6 text-white" />
+            <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
+              <CardHeader className="pb-3 sm:pb-4">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex items-start space-x-2 sm:space-x-3 flex-1 min-w-0">
+                    <div className="p-2 sm:p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl sm:rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <div>
-                      <CardTitle className="text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base sm:text-lg md:text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300 truncate">
                         {customer.name}
                       </CardTitle>
-                      <CardDescription className="text-gray-500 font-medium">
-                        Customer ID: #{customer.id}
+                      <CardDescription className="text-xs sm:text-sm text-gray-500 font-medium truncate">
+                        ID: #{customer.id}
                       </CardDescription>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -477,55 +477,55 @@ const Customers = () => {
                 </div>
               </CardHeader>
               
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4 flex-1">
                 {customer.phone && (
-                  <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <Phone className="h-4 w-4 text-green-600" />
+                  <div className="flex items-center space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
+                    <div className="p-1.5 sm:p-2 bg-green-100 rounded-md sm:rounded-lg flex-shrink-0">
+                      <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{customer.phone}</p>
-                      <p className="text-xs text-gray-500">Phone Number</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{customer.phone}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500">Phone Number</p>
                     </div>
                   </div>
                 )}
                 
                 {customer.address && (
-                  <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl">
-                    <div className="p-2 bg-blue-100 rounded-lg mt-0.5">
-                      <MapPin className="h-4 w-4 text-blue-600" />
+                  <div className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
+                    <div className="p-1.5 sm:p-2 bg-blue-100 rounded-md sm:rounded-lg mt-0.5 flex-shrink-0">
+                      <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{customer.address}</p>
-                      <p className="text-xs text-gray-500">Address</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2">{customer.address}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500">Address</p>
                     </div>
                   </div>
                 )}
                 
-                <div className="flex items-center justify-between pt-2">
-                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 px-3 py-1 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
+                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl text-xs w-fit">
                     <IdCard className="h-3 w-3 mr-1" />
-                    {customer.id_proof}
+                    <span className="truncate">{customer.id_proof}</span>
                   </Badge>
                   
-                  <div className="text-xs text-gray-400">
+                  <div className="text-[10px] sm:text-xs text-gray-400">
                     Added {new Date(customer.created_at).toLocaleDateString('en-IN')}
                   </div>
                 </div>
 
                 {/* Transaction Summary */}
-                <div className="grid grid-cols-3 gap-3 pt-2">
-                  <div className="text-center p-2 bg-blue-50 rounded-lg">
-                    <div className="text-sm font-semibold text-blue-600">₹{transactions.totalCredit.toFixed(0)}</div>
-                    <div className="text-xs text-blue-500">Total Credit</div>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
+                  <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-md sm:rounded-lg">
+                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{transactions.totalCredit.toFixed(0)}</div>
+                    <div className="text-[10px] sm:text-xs text-blue-500">Credit</div>
                   </div>
-                  <div className="text-center p-2 bg-green-50 rounded-lg">
-                    <div className="text-sm font-semibold text-green-600">₹{transactions.totalPayments.toFixed(0)}</div>
-                    <div className="text-xs text-green-500">Paid</div>
+                  <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-md sm:rounded-lg">
+                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{transactions.totalPayments.toFixed(0)}</div>
+                    <div className="text-[10px] sm:text-xs text-green-500">Paid</div>
                   </div>
-                  <div className="text-center p-2 bg-orange-50 rounded-lg">
-                    <div className="text-sm font-semibold text-orange-600">₹{transactions.outstanding.toFixed(0)}</div>
-                    <div className="text-xs text-orange-500">Outstanding</div>
+                  <div className="text-center p-1.5 sm:p-2 bg-orange-50 rounded-md sm:rounded-lg">
+                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{transactions.outstanding.toFixed(0)}</div>
+                    <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
                   </div>
                 </div>
               </CardContent>
