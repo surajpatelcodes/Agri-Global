@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, DollarSign, Clock, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft } from "lucide-react";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
@@ -236,25 +236,6 @@ const Customers = () => {
     customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'paid': return 'bg-green-100 text-green-700 border-green-200';
-      case 'partial': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'pending': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'defaulter': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'paid': return <DollarSign className="h-3 w-3" />;
-      case 'partial': return <Clock className="h-3 w-3" />;
-      case 'pending': return <CreditCard className="h-3 w-3" />;
-      case 'defaulter': return <AlertTriangle className="h-3 w-3" />;
-      default: return <CreditCard className="h-3 w-3" />;
-    }
-  };
 
   const CustomerForm = ({ customer, onSubmit, title, description }) => (
     <div className="space-y-6">
@@ -546,13 +527,6 @@ const Customers = () => {
                     <div className="text-sm font-semibold text-orange-600">₹{transactions.outstanding.toFixed(0)}</div>
                     <div className="text-xs text-orange-500">Outstanding</div>
                   </div>
-                </div>
-                
-                <div className="flex items-center justify-between pt-2">
-                  <Badge className={`px-3 py-1 rounded-xl ${getStatusColor(transactions.status)}`}>
-                    {getStatusIcon(transactions.status)}
-                    <span className="ml-1 capitalize">{transactions.status}</span>
-                  </Badge>
                 </div>
               </CardContent>
             </Card>
