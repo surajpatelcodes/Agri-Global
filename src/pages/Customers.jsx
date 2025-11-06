@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft } from "lucide-react";
@@ -18,6 +19,10 @@ const Customers = () => {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [customerTransactions, setCustomerTransactions] = useState({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [editConfirmOpen, setEditConfirmOpen] = useState(false);
+  const [pendingEditData, setPendingEditData] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -172,17 +177,23 @@ const Customers = () => {
     e.preventDefault();
     const formData = new FormData(e.target);
     
-    try {
-      const customerData = {
-        name: formData.get("name"),
-        phone: formData.get("phone"),
-        address: formData.get("address"),
-        id_proof: formData.get("id_proof"),
-      };
+    const customerData = {
+      name: formData.get("name"),
+      phone: formData.get("phone"),
+      address: formData.get("address"),
+      id_proof: formData.get("id_proof"),
+    };
 
+    // Store the data and show confirmation
+    setPendingEditData(customerData);
+    setEditConfirmOpen(true);
+  };
+
+  const confirmEditCustomer = async () => {
+    try {
       const { error } = await supabase
         .from("customers")
-        .update(customerData)
+        .update(pendingEditData)
         .eq("id", editingCustomer.id);
 
       if (error) throw error;
@@ -193,6 +204,8 @@ const Customers = () => {
       });
 
       setEditingCustomer(null);
+      setEditConfirmOpen(false);
+      setPendingEditData(null);
       fetchCustomers();
     } catch (error) {
       console.error("Error updating customer:", error);
@@ -201,17 +214,21 @@ const Customers = () => {
         description: "Failed to update customer",
         variant: "destructive",
       });
+      setEditConfirmOpen(false);
     }
   };
 
-  const handleDeleteCustomer = async (customerId) => {
-    if (!confirm("Are you sure you want to delete this customer?")) return;
+  const handleDeleteCustomer = (customer) => {
+    setCustomerToDelete(customer);
+    setDeleteConfirmOpen(true);
+  };
 
+  const confirmDeleteCustomer = async () => {
     try {
       const { error } = await supabase
         .from("customers")
         .delete()
-        .eq("id", customerId);
+        .eq("id", customerToDelete.id);
 
       if (error) throw error;
 
@@ -220,6 +237,8 @@ const Customers = () => {
         description: "Customer deleted successfully",
       });
 
+      setDeleteConfirmOpen(false);
+      setCustomerToDelete(null);
       fetchCustomers();
     } catch (error) {
       console.error("Error deleting customer:", error);
@@ -228,6 +247,7 @@ const Customers = () => {
         description: "Failed to delete customer",
         variant: "destructive",
       });
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -468,7 +488,7 @@ const Customers = () => {
                       className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteCustomer(customer.id);
+                        handleDeleteCustomer(customer);
                       }}
                     >
                       <Trash2 className="h-4 w-4 text-red-600" />
@@ -552,6 +572,65 @@ const Customers = () => {
           <CustomerForm customer={editingCustomer} onSubmit={handleEditCustomer} />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Customer
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to delete <span className="font-semibold text-gray-900">{customerToDelete?.name}</span>?</p>
+              <p className="text-sm text-red-600">This action cannot be undone. All associated records will be permanently deleted.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteConfirmOpen(false);
+              setCustomerToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCustomer}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Delete Customer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Confirmation Dialog */}
+      <AlertDialog open={editConfirmOpen} onOpenChange={setEditConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-blue-600">
+              <Edit className="h-5 w-5" />
+              Confirm Changes
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to update <span className="font-semibold text-gray-900">{editingCustomer?.name}</span>'s information? This will modify their biodata records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setEditConfirmOpen(false);
+              setPendingEditData(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmEditCustomer}
+              className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
+            >
+              Confirm Update
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
