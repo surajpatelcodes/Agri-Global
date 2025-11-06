@@ -1,14 +1,12 @@
 import { forwardRef, ButtonHTMLAttributes } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
 interface AccessibleButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ariaLabel?: string;
   ariaDescribedBy?: string;
   isLoading?: boolean;
   loadingText?: string;
 }
-
 export const AccessibleButton = forwardRef<HTMLButtonElement, AccessibleButtonProps>(
   ({ ariaLabel, ariaDescribedBy, isLoading, loadingText, children, className, ...props }, ref) => {
     return (

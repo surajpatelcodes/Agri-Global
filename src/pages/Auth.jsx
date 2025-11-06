@@ -148,7 +148,7 @@ const Auth = () => {
           <h1 className="text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
             A.I.A.D.A
           </h1>
-          <p className="text-gray-600 text-lg">ALL INDIA AGRICULTURE DEALERSHIP ASSOCIATION</p>
+          <p className="text-gray-600 text-lg">ALL INDIA AGRICULTURE DEALERS ASSOCIATION</p>
           <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-500">
             <div className="flex items-center gap-1">
               <Users className="h-4 w-4" />
