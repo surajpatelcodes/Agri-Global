@@ -257,65 +257,124 @@ const Customers = () => {
   );
 
 
-  const CustomerForm = ({ customer, onSubmit, title, description }) => (
-    <div className="space-y-6">
-      <form onSubmit={onSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  const CustomerForm = ({ customer, onSubmit, title, description }) => {
+    const [errors, setErrors] = useState({});
+
+    const validateForm = (formData) => {
+      const newErrors = {};
+      const name = formData.get("name");
+      const phone = formData.get("phone");
+      const address = formData.get("address");
+      const idProof = formData.get("id_proof");
+
+      if (name && name.length < 5) {
+        newErrors.name = "Name must be at least 5 characters";
+      }
+      if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+        newErrors.phone = "Please enter a valid 10-digit Indian mobile number";
+      }
+      if (address && address.length < 10) {
+        newErrors.address = "Address must be at least 10 characters";
+      }
+      if (idProof && !/^\d{12}$/.test(idProof)) {
+        newErrors.idProof = "Aadhaar number must be exactly 12 digits";
+      }
+
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      if (validateForm(formData)) {
+        onSubmit(e);
+        setErrors({});
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-sm font-semibold text-gray-700">
+                Full Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                defaultValue={customer?.name || ""}
+                placeholder="Enter customer's full name"
+                className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
+                minLength={5}
+                maxLength={100}
+                required
+              />
+              {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-semibold text-gray-700">
+                Phone Number <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                defaultValue={customer?.phone || ""}
+                placeholder="10-digit mobile number"
+                className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
+                required
+              />
+              {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+            </div>
+          </div>
+          
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-semibold text-gray-700">Full Name</Label>
+            <Label htmlFor="address" className="text-sm font-semibold text-gray-700">
+              Address <span className="text-red-500">*</span>
+            </Label>
             <Input
-              id="name"
-              name="name"
-              defaultValue={customer?.name || ""}
-              placeholder="Enter customer's full name"
+              id="address"
+              name="address"
+              defaultValue={customer?.address || ""}
+              placeholder="Enter complete address (min 10 characters)"
               className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
+              minLength={10}
+              maxLength={500}
               required
             />
+            {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
+          
           <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-semibold text-gray-700">Phone Number</Label>
+            <Label htmlFor="id_proof" className="text-sm font-semibold text-gray-700">
+              Aadhaar Number <span className="text-red-500">*</span>
+            </Label>
             <Input
-              id="phone"
-              name="phone"
+              id="id_proof"
+              name="id_proof"
               type="tel"
-              defaultValue={customer?.phone || ""}
-              placeholder="Enter phone number"
+              defaultValue={customer?.id_proof || ""}
+              placeholder="12-digit Aadhaar number"
               className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
+              maxLength={12}
+              pattern="[0-9]{12}"
               required
             />
+            {errors.idProof && <p className="text-xs text-red-500">{errors.idProof}</p>}
           </div>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="address" className="text-sm font-semibold text-gray-700">Address</Label>
-          <Input
-            id="address"
-            name="address"
-            defaultValue={customer?.address || ""}
-            placeholder="Enter complete address"
-            className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="id_proof" className="text-sm font-semibold text-gray-700">ID Proof</Label>
-          <Input
-            id="id_proof"
-            name="id_proof"
-            defaultValue={customer?.id_proof || ""}
-            placeholder="Aadhaar, PAN, Voter ID, etc."
-            className="h-11 border-gray-200 focus:border-green-500 transition-all duration-300"
-            required
-          />
-        </div>
-        
-        <Button type="submit" className="w-full h-12 btn-3d bg-gradient-primary hover:shadow-primary font-semibold">
-          <Sparkles className="h-4 w-4 mr-2" />
-          {customer ? "Update Customer" : "Add Customer"}
-        </Button>
-      </form>
-    </div>
-  );
+          
+          <Button type="submit" className="w-full h-12 btn-3d bg-gradient-primary hover:shadow-primary font-semibold">
+            <Sparkles className="h-4 w-4 mr-2" />
+            {customer ? "Update Customer" : "Add Customer"}
+          </Button>
+        </form>
+      </div>
+    );
+  };
 
   if (loading) {
     return (

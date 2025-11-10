@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,6 +29,10 @@ const Credits = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [userId, setUserId] = useState("");
+  const [defaulterConfirmOpen, setDefaulterConfirmOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const [creditHistoryDialogOpen, setCreditHistoryDialogOpen] = useState(false);
+  const [selectedCustomerHistory, setSelectedCustomerHistory] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -155,6 +160,13 @@ const Credits = () => {
       return;
     }
 
+    // Show confirmation for defaulter status
+    if (newStatus === "defaulter") {
+      setPendingStatusChange({ creditId, newStatus });
+      setDefaulterConfirmOpen(true);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("credits")
@@ -168,6 +180,35 @@ const Credits = () => {
         description: "Credit status updated successfully",
       });
 
+      fetchCredits();
+    } catch (error) {
+      console.error("Error updating credit status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update credit status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmStatusChange = async () => {
+    if (!pendingStatusChange) return;
+
+    try {
+      const { error } = await supabase
+        .from("credits")
+        .update({ status: pendingStatusChange.newStatus })
+        .eq("id", pendingStatusChange.creditId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Credit status updated successfully",
+      });
+
+      setDefaulterConfirmOpen(false);
+      setPendingStatusChange(null);
       fetchCredits();
     } catch (error) {
       console.error("Error updating credit status:", error);
@@ -257,6 +298,21 @@ const Credits = () => {
     credit.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     credit.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Group credits by unique customers
+  const uniqueCustomers = filteredCredits.reduce((acc, credit) => {
+    const customerId = credit.customer_id;
+    if (!acc[customerId]) {
+      acc[customerId] = {
+        customer: credit.customers,
+        credits: []
+      };
+    }
+    acc[customerId].credits.push(credit);
+    return acc;
+  }, {});
+
+  const customersList = Object.values(uniqueCustomers);
 
   if (loading) {
     return (
@@ -388,7 +444,7 @@ const Credits = () => {
         />
       </div>
 
-      {filteredCredits.length === 0 ? (
+      {customersList.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -406,57 +462,43 @@ const Credits = () => {
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredCredits.map((credit) => (
-            <Card key={credit.id} className="hover:shadow-lg transition-shadow">
+          {customersList.map(({ customer, credits: customerCredits }) => (
+            <Card key={customer?.id} className="hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
                       <div className="flex items-center space-x-2">
                         <User className="h-4 w-4 text-gray-500" />
-                        <span className="font-semibold">{credit.customers?.name}</span>
+                        <span className="font-semibold">{customer?.name}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <DollarSign className="h-4 w-4 text-gray-500" />
                         <span className="font-bold text-lg">
-                          {formatCurrency(credit.amount)}
+                          {formatCurrency(customerCredits.reduce((sum, c) => sum + parseFloat(c.amount), 0))}
                         </span>
                       </div>
+                      <Badge variant="secondary">
+                        {customerCredits.length} {customerCredits.length === 1 ? 'Credit' : 'Credits'}
+                      </Badge>
                     </div>
                     
-                    {credit.description && (
-                      <p className="text-gray-600 mb-3">{credit.description}</p>
-                    )}
-                    
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <div className="flex items-center space-x-1">
-                        <CalendarIcon className="h-4 w-4" />
-                        <span>{formatDate(credit.created_at)}</span>
-                      </div>
-                      <span>ID: #{credit.id}</span>
+                      <span>Phone: {customer?.phone}</span>
                     </div>
                   </div>
                   
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    <Badge className={getStatusColor(credit.status)}>
-                      {credit.status.charAt(0).toUpperCase() + credit.status.slice(1)}
-                    </Badge>
-                    
-                    <Select
-                      key={`status-${credit.id}-${credit.status}`}
-                      value={credit.status}
-                      onValueChange={(value) => handleStatusChange(credit.id, value)}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCustomerHistory({ name: customer?.name, credits: customerCredits });
+                        setCreditHistoryDialogOpen(true);
+                      }}
                     >
-                      <SelectTrigger className="w-32">
-                        <SelectValue placeholder="Update status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="partial">Partial</SelectItem>
-                        <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="defaulter">Defaulter</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      Credit History
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -550,6 +592,64 @@ const Credits = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Defaulter Confirmation Dialog */}
+      <AlertDialog open={defaulterConfirmOpen} onOpenChange={setDefaulterConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Confirm Defaulter Status</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to mark this credit as defaulter? This action can be reversed later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDefaulterConfirmOpen(false);
+              setPendingStatusChange(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmStatusChange}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Credit History Dialog */}
+      <Dialog open={creditHistoryDialogOpen} onOpenChange={setCreditHistoryDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Credit History - {selectedCustomerHistory?.name}</DialogTitle>
+            <DialogDescription>
+              Complete credit transaction history for this customer
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedCustomerHistory?.credits?.map((credit) => (
+              <Card key={credit.id}>
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
+                      <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
+                    </div>
+                    <Badge className={getStatusColor(credit.status)}>
+                      {credit.status.charAt(0).toUpperCase() + credit.status.slice(1)}
+                    </Badge>
+                  </div>
+                  {credit.description && (
+                    <p className="text-sm text-gray-600">{credit.description}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

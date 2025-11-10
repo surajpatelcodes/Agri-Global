@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, DollarSign, User, Calendar, CreditCard, ArrowLeft } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -18,6 +19,8 @@ const Payments = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -91,38 +94,110 @@ const Payments = () => {
   const handleAddPayment = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      // Find the latest credit for the selected customer
+      // Find all credits for the selected customer
       const customerId = parseInt(formData.get("customer_id"));
+      const paymentAmount = parseFloat(formData.get("amount"));
+      
       const { data: credits } = await supabase
         .from("credits")
-        .select("id")
+        .select("id, amount, status")
         .eq("customer_id", customerId)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      const creditId = credits?.[0]?.id;
-      if (!creditId) throw new Error("No credit found for this customer");
-      const paymentData = {
-        credit_id: creditId,
-        amount: parseFloat(formData.get("amount")),
+        .order("created_at", { ascending: false });
+      
+      if (!credits || credits.length === 0) {
+        throw new Error("No credit found for this customer");
+      }
+
+      // Calculate total outstanding
+      const { data: existingPayments } = await supabase
+        .from("payments")
+        .select("amount, credit_id")
+        .in("credit_id", credits.map(c => c.id));
+
+      const totalCredit = credits.reduce((sum, c) => sum + parseFloat(c.amount), 0);
+      const totalPaid = (existingPayments || []).reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const outstanding = totalCredit - totalPaid;
+
+      // Store payment data and show confirmation
+      setPendingPaymentData({
+        credit_id: credits[0].id,
+        amount: paymentAmount,
         payment_method: formData.get("payment_method"),
         payment_date: formData.get("payment_date"),
         created_by: user?.id,
-      };
-      const { error } = await supabase
-        .from("payments")
-        .insert([paymentData]);
-      if (error) throw error;
-      toast({
-        title: "Success",
-        description: "Payment recorded successfully",
+        customerId,
+        isFullPayment: paymentAmount >= outstanding,
+        outstanding
       });
-      setIsAddDialogOpen(false);
-      fetchPayments();
-      e.target.reset();
+      
+      setPaymentConfirmOpen(true);
     } catch (error) {
-      console.error("Error adding payment:", error);
+      console.error("Error preparing payment:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to prepare payment",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmPayment = async () => {
+    if (!pendingPaymentData) return;
+
+    try {
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert([{
+          credit_id: pendingPaymentData.credit_id,
+          amount: pendingPaymentData.amount,
+          payment_method: pendingPaymentData.payment_method,
+          payment_date: pendingPaymentData.payment_date,
+          created_by: pendingPaymentData.created_by
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      // Update credit status
+      if (pendingPaymentData.isFullPayment) {
+        // Mark as paid
+        const { error: statusError } = await supabase
+          .from("credits")
+          .update({ status: "paid" })
+          .eq("customer_id", pendingPaymentData.customerId);
+
+        if (statusError) throw statusError;
+
+        toast({
+          title: "Success",
+          description: "Full payment recorded successfully. Customer marked as paid.",
+        });
+      } else {
+        // Mark as partial
+        const { error: statusError } = await supabase
+          .from("credits")
+          .update({ status: "partial" })
+          .eq("customer_id", pendingPaymentData.customerId);
+
+        if (statusError) throw statusError;
+
+        toast({
+          title: "Success",
+          description: "Partial payment recorded successfully. Payment status updated globally.",
+        });
+      }
+
+      setPaymentConfirmOpen(false);
+      setPendingPaymentData(null);
+      setIsAddDialogOpen(false);
+      setSelectedCustomerId("");
+      fetchPayments();
+      fetchCustomersWithCredit();
+    } catch (error) {
+      console.error("Error recording payment:", error);
       toast({
         title: "Error",
         description: "Failed to record payment",
@@ -356,6 +431,54 @@ const Payments = () => {
           ))}
         </div>
       )}
+
+      {/* Payment Confirmation Dialog */}
+      <AlertDialog open={paymentConfirmOpen} onOpenChange={setPaymentConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-green-600">
+              <DollarSign className="h-5 w-5" />
+              Confirm Payment
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to record this payment?</p>
+              {pendingPaymentData && (
+                <>
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-2">
+                    <p><span className="font-semibold">Amount:</span> {pendingPaymentData.amount && new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(pendingPaymentData.amount)}</p>
+                    <p><span className="font-semibold">Outstanding:</span> {pendingPaymentData.outstanding && new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(pendingPaymentData.outstanding)}</p>
+                    <p><span className="font-semibold">Payment Type:</span> {pendingPaymentData.isFullPayment ? 'Full Payment' : 'Partial Payment'}</p>
+                  </div>
+                  {pendingPaymentData.isFullPayment && (
+                    <p className="text-sm text-green-600 font-medium">
+                      ✓ This will mark the customer as paid and remove them from Outstanding and Credits sections.
+                    </p>
+                  )}
+                  {!pendingPaymentData.isFullPayment && (
+                    <p className="text-sm text-orange-600 font-medium">
+                      ⚠ This is a partial payment. The payment status will be updated globally.
+                    </p>
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPaymentConfirmOpen(false);
+              setPendingPaymentData(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPayment}
+              className="bg-green-600 hover:bg-green-700 focus:ring-green-600"
+            >
+              Confirm Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

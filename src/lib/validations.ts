@@ -5,7 +5,7 @@ export const customerSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(2, "Name must be at least 2 characters")
+    .min(5, "Name must be at least 5 characters")
     .max(100, "Name must be less than 100 characters")
     .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters and spaces"),
   phone: z
@@ -15,13 +15,12 @@ export const customerSchema = z.object({
   address: z
     .string()
     .trim()
-    .max(500, "Address must be less than 500 characters")
-    .optional()
-    .or(z.literal("")),
+    .min(10, "Address must be at least 10 characters")
+    .max(500, "Address must be less than 500 characters"),
   id_proof: z
     .string()
     .trim()
-    .regex(/^\d{12}$/, "Aadhar number must be exactly 12 digits")
+    .regex(/^\d{12}$/, "Aadhaar number must be exactly 12 digits")
 });
 
 export type CustomerFormData = z.infer<typeof customerSchema>;
