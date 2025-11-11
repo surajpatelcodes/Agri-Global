@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,22 @@ const Customers = () => {
   const [pendingEditData, setPendingEditData] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Open add-customer dialog when URL contains ?add=1 and clean up on close
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setIsAddDialogOpen(params.get('add') === '1');
+  }, [location.search]);
+
+  const handleDialogChange = (open) => {
+    setIsAddDialogOpen(open);
+    if (!open) {
+      const params = new URLSearchParams(location.search);
+      params.delete('add');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  };
 
   useEffect(() => {
     let creditsSubscription;

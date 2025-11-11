@@ -283,6 +283,19 @@ const Credits = () => {
     }
   };
 
+  // Aggregate credits array to determine an overall status for the customer
+  const computeCustomerStatus = (credits = []) => {
+    if (!Array.isArray(credits) || credits.length === 0) return 'paid';
+    const statuses = new Set(credits.map(c => c.status));
+    if (statuses.has('defaulter')) return 'defaulter';
+    // If all paid
+    if ([...statuses].every(s => s === 'paid')) return 'paid';
+    if (statuses.has('partial')) return 'partial';
+    if (statuses.has('pending')) return 'pending';
+    // default to first credit's status
+    return credits[0].status || 'paid';
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -623,32 +636,48 @@ const Credits = () => {
 
       {/* Credit History Dialog */}
       <Dialog open={creditHistoryDialogOpen} onOpenChange={setCreditHistoryDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Credit History - {selectedCustomerHistory?.name}</DialogTitle>
-            <DialogDescription>
-              Complete credit transaction history for this customer
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {selectedCustomerHistory?.credits?.map((credit) => (
-              <Card key={credit.id}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
-                      <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          {/* Sticky header: customer name + aggregated status stays fixed */}
+          <div className="sticky top-0 z-20 bg-white border-b shadow-sm transition-shadow dark:bg-slate-900">
+            <DialogHeader className="p-4 relative pt-6">
+              <div className="flex items-center gap-3">
+                <DialogTitle>Credit History - {selectedCustomerHistory?.name}</DialogTitle>
+                {selectedCustomerHistory?.credits && (
+                  <Badge className={getStatusColor(computeCustomerStatus(selectedCustomerHistory?.credits))}>
+                    {(() => {
+                      const s = computeCustomerStatus(selectedCustomerHistory?.credits);
+                      return s.charAt(0).toUpperCase() + s.slice(1);
+                    })()}
+                  </Badge>
+                )}
+              </div>
+              <DialogDescription>
+                Complete credit transaction history for this customer
+              </DialogDescription>
+
+              {/* Header close button removed; global dialog close button is used instead */}
+            </DialogHeader>
+          </div>
+
+          {/* Scrollable transactions list */}
+          <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 6.5rem)' }}>
+            <div className="space-y-4">
+              {selectedCustomerHistory?.credits?.map((credit) => (
+                <Card key={credit.id}>
+                  <CardContent className="p-4">
+                    <div className="mb-2">
+                      <div>
+                        <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
+                        <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
+                      </div>
                     </div>
-                    <Badge className={getStatusColor(credit.status)}>
-                      {credit.status.charAt(0).toUpperCase() + credit.status.slice(1)}
-                    </Badge>
-                  </div>
-                  {credit.description && (
-                    <p className="text-sm text-gray-600">{credit.description}</p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {credit.description && (
+                      <p className="text-sm text-gray-600">{credit.description}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

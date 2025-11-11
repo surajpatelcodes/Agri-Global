@@ -34,20 +34,21 @@ const Payments = () => {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("payments")
-        .select(`
-          *,
-          credits (
-            id,
-            amount,
-            description,
-            customers (
+          .select(`
+            *,
+            credits (
               id,
-              name,
-              phone,
-              created_by
+              amount,
+              description,
+              customers (
+                id,
+                name,
+                phone,
+                id_proof,
+                created_by
+              )
             )
-          )
-        `)
+          `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -73,7 +74,7 @@ const Payments = () => {
       // Get all customers added by user
       const { data: customers, error: custError } = await supabase
         .from("customers")
-        .select("id, name, phone")
+        .select("id, name, phone, id_proof")
         .eq("created_by", user?.id);
       if (custError) throw custError;
       // Get credits for those customers
@@ -98,7 +99,18 @@ const Payments = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       // Find all credits for the selected customer
-      const customerId = parseInt(formData.get("customer_id"));
+      const customerIdRaw = formData.get("customer_id");
+      const customerId = customerIdRaw ? parseInt(customerIdRaw) : NaN;
+
+      // Validation: customer must be selected
+      if (!customerId || isNaN(customerId)) {
+        toast({
+          title: "Select customer",
+          description: "Please select a customer before recording a payment.",
+          variant: "destructive",
+        });
+        return;
+      }
       const paymentAmount = parseFloat(formData.get("amount"));
       
       const { data: credits } = await supabase
@@ -217,10 +229,19 @@ const Payments = () => {
     return new Date(dateString).toLocaleDateString('en-IN');
   };
 
-  const filteredPayments = payments.filter(payment =>
-    payment.credits?.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.payment_method?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPayments = payments.filter(payment => {
+    const term = searchTerm.toLowerCase();
+    const name = payment.credits?.customers?.name?.toLowerCase() || '';
+    const phone = payment.credits?.customers?.phone?.toLowerCase() || '';
+    const aadhar = payment.credits?.customers?.id_proof?.toLowerCase() || '';
+    const method = payment.payment_method?.toLowerCase() || '';
+    return (
+      name.includes(term) ||
+      phone.includes(term) ||
+      aadhar.includes(term) ||
+      method.includes(term)
+    );
+  });
 
   if (loading) {
     return (
@@ -302,12 +323,12 @@ const Payments = () => {
                         if (!search) return true;
                         const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(search);
                         const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(search);
-                        const aadharMatch = typeof c.id_proof === 'string' && c.id_proof.slice(-4).includes(search);
+                        const aadharMatch = typeof c.id_proof === 'string' && c.id_proof.toLowerCase().includes(search);
                         return nameMatch || phoneMatch || aadharMatch;
                       })
                       .map((customer) => (
                         <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name} {customer.phone ? `📞${customer.phone}` : ""}
+                          {customer.name} {customer.phone ? `📞${customer.phone}` : ""} {customer.id_proof ? `• Aadhar ${customer.id_proof}` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -350,7 +371,7 @@ const Payments = () => {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={!selectedCustomerId}>
                 Record Payment
               </Button>
             </form>
@@ -361,7 +382,7 @@ const Payments = () => {
       <div className="flex items-center space-x-2">
         <Search className="h-4 w-4 text-gray-500" />
         <Input
-          placeholder="Search payments..."
+          placeholder="Name,Phone,Addhar..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -422,7 +443,7 @@ const Payments = () => {
                         <span>Paid on: {formatDate(payment.payment_date)}</span>
                       </div>
                       <span>Method: {payment.payment_method?.toUpperCase()}</span>
-                      <span>Payment ID: #{payment.id}</span>
+                      <span className="ml-2">{payment.credits?.customers?.phone ? `📞${payment.credits?.customers?.phone}` : ''}{payment.credits?.customers?.id_proof ? ` • Aadhar ${payment.credits?.customers?.id_proof}` : ''}</span>
                     </div>
                   </div>
                 </div>

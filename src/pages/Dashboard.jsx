@@ -204,7 +204,7 @@ const Dashboard = memo(() => {
       title: "Add Customer",
       description: "Register new customer",
       icon: Users,
-      action: () => navigate('/customers'),
+      action: () => navigate('/?add=1#customers'),
       gradient: "from-blue-500 to-blue-600",
     },
     {

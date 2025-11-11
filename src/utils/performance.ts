@@ -52,63 +52,72 @@ export function reportWebVitals() {
     });
   }
 
-  // Largest Contentful Paint (LCP) - requires PerformanceObserver
+  // Largest Contentful Paint (LCP), First Input Delay (FID), and CLS - use feature detection
   if ('PerformanceObserver' in window) {
-    try {
-      const lcpObserver = new PerformanceObserver((entryList) => {
-        const entries = entryList.getEntries();
-        const lastEntry = entries[entries.length - 1] as any;
-        if (lastEntry) {
-          logPerformanceMetric({
-            name: 'LCP',
-            value: lastEntry.renderTime || lastEntry.loadTime,
-            rating: getRating(lastEntry.renderTime || lastEntry.loadTime, 'LCP'),
-            delta: lastEntry.renderTime || lastEntry.loadTime,
-          });
-        }
-      });
-      lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
-    } catch (e) {
-      // LCP not supported
-    }
+    const supported = (PerformanceObserver as any).supportedEntryTypes || [];
 
-    // First Input Delay (FID)
-    try {
-      const fidObserver = new PerformanceObserver((entryList) => {
-        const entries = entryList.getEntries();
-        entries.forEach((entry: any) => {
-          logPerformanceMetric({
-            name: 'FID',
-            value: entry.processingStart - entry.startTime,
-            rating: getRating(entry.processingStart - entry.startTime, 'FID'),
-            delta: entry.processingStart - entry.startTime,
-          });
-        });
-      });
-      fidObserver.observe({ entryTypes: ['first-input'] });
-    } catch (e) {
-      // FID not supported
-    }
-
-    // Cumulative Layout Shift (CLS)
-    try {
-      let clsValue = 0;
-      const clsObserver = new PerformanceObserver((entryList) => {
-        for (const entry of entryList.getEntries() as any) {
-          if (!entry.hadRecentInput) {
-            clsValue += entry.value;
+    // LCP
+    if (supported.includes('largest-contentful-paint')) {
+      try {
+        const lcpObserver = new PerformanceObserver((entryList) => {
+          const entries = entryList.getEntries();
+          const lastEntry = entries[entries.length - 1] as any;
+          if (lastEntry) {
             logPerformanceMetric({
-              name: 'CLS',
-              value: clsValue,
-              rating: getRating(clsValue, 'CLS'),
-              delta: entry.value,
+              name: 'LCP',
+              value: lastEntry.renderTime || lastEntry.loadTime,
+              rating: getRating(lastEntry.renderTime || lastEntry.loadTime, 'LCP'),
+              delta: lastEntry.renderTime || lastEntry.loadTime,
             });
           }
-        }
-      });
-      clsObserver.observe({ entryTypes: ['layout-shift'] });
-    } catch (e) {
-      // CLS not supported
+        });
+        lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
+      } catch (e) {
+        // LCP observe failed
+      }
+    }
+
+    // FID
+    if (supported.includes('first-input')) {
+      try {
+        const fidObserver = new PerformanceObserver((entryList) => {
+          const entries = entryList.getEntries();
+          entries.forEach((entry: any) => {
+            logPerformanceMetric({
+              name: 'FID',
+              value: entry.processingStart - entry.startTime,
+              rating: getRating(entry.processingStart - entry.startTime, 'FID'),
+              delta: entry.processingStart - entry.startTime,
+            });
+          });
+        });
+        fidObserver.observe({ entryTypes: ['first-input'] });
+      } catch (e) {
+        // FID observe failed
+      }
+    }
+
+    // CLS
+    if (supported.includes('layout-shift')) {
+      try {
+        let clsValue = 0;
+        const clsObserver = new PerformanceObserver((entryList) => {
+          for (const entry of entryList.getEntries() as any) {
+            if (!entry.hadRecentInput) {
+              clsValue += entry.value;
+              logPerformanceMetric({
+                name: 'CLS',
+                value: clsValue,
+                rating: getRating(clsValue, 'CLS'),
+                delta: entry.value,
+              });
+            }
+          }
+        });
+        clsObserver.observe({ entryTypes: ['layout-shift'] });
+      } catch (e) {
+        // CLS observe failed
+      }
     }
   }
 }

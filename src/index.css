@@ -356,3 +356,17 @@ All colors MUST be HSL.
     top: 1rem;
   }
 }
+
+/* Prevent stray text caret (I-beam) appearing on non-editable elements.
+   Hide caret by default and restore it for inputs, textareas, and contenteditable elements. */
+@layer base {
+  /* Hide caret on anything that is not an input, textarea or contenteditable element */
+  :where(*):not(input):not(textarea):not([contenteditable]) {
+    caret-color: transparent;
+  }
+
+  /* Ensure editable controls keep the native caret */
+  input, textarea, [contenteditable] {
+    caret-color: auto;
+  }
+}
