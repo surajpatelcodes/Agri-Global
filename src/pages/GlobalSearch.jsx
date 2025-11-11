@@ -71,7 +71,8 @@ const GlobalSearch = () => {
         throw error;
       }
 
-      if (!data || data.length === 0) {
+      // Check if customer was found - if outstanding_range is "No Credit History", customer doesn't exist
+      if (!data || data.length === 0 || data[0]?.outstanding_range === 'No Credit History') {
         setSearchResult(null);
         toast({
           title: "No Results",
@@ -199,7 +200,7 @@ const GlobalSearch = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertCircle className="h-5 w-5" />
-                    Credit Status Summary
+                    {searchResult.customer_name} - Credit Status Summary
                   </CardTitle>
                   <CardDescription>
                     Privacy-preserving summary of customer credit across all shops

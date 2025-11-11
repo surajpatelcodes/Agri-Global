@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,85 +13,61 @@ import { Plus, Search, DollarSign, User, Calendar, CreditCard, ArrowLeft } from 
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 const Payments = () => {
-  const [payments, setPayments] = useState([]);
-  const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchPayments();
-    fetchCustomersWithCredit();
-  }, []);
-
+  // Fetch payments using optimized SQL function
   const fetchPayments = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("payments")
-          .select(`
-            *,
-            credits (
-              id,
-              amount,
-              description,
-              customers (
-                id,
-                name,
-                phone,
-                id_proof,
-                created_by
-              )
-            )
-          `)
-        .order("created_at", { ascending: false });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
 
-      if (error) throw error;
-      // Only show payments where the customer was added by the logged-in user
-      const filtered = (data || []).filter(payment => payment.credits?.customers?.created_by === user?.id);
-      setPayments(filtered);
-    } catch (error) {
-      console.error("Error fetching payments:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch payments",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await supabase.rpc('get_all_payments_with_details', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
   };
 
-  // Fetch only customers added by user who have taken credit
+  // Fetch customers with pending credits using optimized SQL function
   const fetchCustomersWithCredit = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      // Get all customers added by user
-      const { data: customers, error: custError } = await supabase
-        .from("customers")
-        .select("id, name, phone, id_proof")
-        .eq("created_by", user?.id);
-      if (custError) throw custError;
-      // Get credits for those customers
-      const { data: credits, error: credError } = await supabase
-        .from("credits")
-        .select("customer_id")
-        .eq("issued_by", user?.id);
-      if (credError) throw credError;
-      const creditedCustomerIds = new Set((credits || []).map(c => c.customer_id));
-      const filtered = (customers || []).filter(c => creditedCustomerIds.has(c.id));
-      setCustomers(filtered);
-    } catch (error) {
-      console.error("Error fetching customers with credit:", error);
-      setCustomers([]);
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase.rpc('get_customers_with_pending_credits', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
   };
+
+  // Use React Query for payments
+  const { data: payments = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['payments'],
+    queryFn: fetchPayments,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
+
+  // Use React Query for customers
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers-with-credit'],
+    queryFn: fetchCustomersWithCredit,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
 
   const handleAddPayment = async (e) => {
     e.preventDefault();
@@ -206,8 +183,8 @@ const Payments = () => {
       setPendingPaymentData(null);
       setIsAddDialogOpen(false);
       setSelectedCustomerId("");
-      fetchPayments();
-      fetchCustomersWithCredit();
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
     } catch (error) {
       console.error("Error recording payment:", error);
       toast({
@@ -231,9 +208,9 @@ const Payments = () => {
 
   const filteredPayments = payments.filter(payment => {
     const term = searchTerm.toLowerCase();
-    const name = payment.credits?.customers?.name?.toLowerCase() || '';
-    const phone = payment.credits?.customers?.phone?.toLowerCase() || '';
-    const aadhar = payment.credits?.customers?.id_proof?.toLowerCase() || '';
+    const name = payment.customer_name?.toLowerCase() || '';
+    const phone = payment.customer_phone?.toLowerCase() || '';
+    const aadhar = payment.customer_id_proof?.toLowerCase() || '';
     const method = payment.payment_method?.toLowerCase() || '';
     return (
       name.includes(term) ||
@@ -243,7 +220,7 @@ const Payments = () => {
     );
   });
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -262,6 +239,24 @@ const Payments = () => {
             </Card>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Payments</h1>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 font-semibold">Error loading payments</div>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -416,7 +411,7 @@ const Payments = () => {
                       <div className="flex items-center space-x-2">
                         <User className="h-4 w-4 text-gray-500" />
                         <span className="font-semibold">
-                          {payment.credits?.customers?.name}
+                          {payment.customer_name}
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -430,10 +425,10 @@ const Payments = () => {
                     <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
                       <div className="flex items-center space-x-2">
                         <CreditCard className="h-4 w-4" />
-                        <span>Credit Amount: {formatCurrency(payment.credits?.amount || 0)}</span>
+                        <span>Credit Amount: {formatCurrency(payment.credit_amount || 0)}</span>
                       </div>
-                      {payment.credits?.description && (
-                        <span>({payment.credits.description})</span>
+                      {payment.credit_description && (
+                        <span>({payment.credit_description})</span>
                       )}
                     </div>
                     
@@ -443,7 +438,7 @@ const Payments = () => {
                         <span>Paid on: {formatDate(payment.payment_date)}</span>
                       </div>
                       <span>Method: {payment.payment_method?.toUpperCase()}</span>
-                      <span className="ml-2">{payment.credits?.customers?.phone ? `📞${payment.credits?.customers?.phone}` : ''}{payment.credits?.customers?.id_proof ? ` • Aadhar ${payment.credits?.customers?.id_proof}` : ''}</span>
+                      <span className="ml-2">{payment.customer_phone ? `📞${payment.customer_phone}` : ''}{payment.customer_id_proof ? ` • Aadhar ${payment.customer_id_proof}` : ''}</span>
                     </div>
                   </div>
                 </div>

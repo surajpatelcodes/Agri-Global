@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft } from "lucide-react";
 
 const Customers = () => {
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [customerTransactions, setCustomerTransactions] = useState({});
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState(null);
   const [editConfirmOpen, setEditConfirmOpen] = useState(false);
@@ -26,6 +23,7 @@ const Customers = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   // Open add-customer dialog when URL contains ?add=1 and clean up on close
   useEffect(() => {
@@ -42,113 +40,53 @@ const Customers = () => {
     }
   };
 
+  // Fetch customers with transactions using optimized SQL function
+  const fetchCustomersWithTransactions = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase.rpc('get_customer_transactions', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
+  };
+
+  // Use React Query for caching and automatic refetches
+  const { data: customers = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['customers-with-transactions'],
+    queryFn: fetchCustomersWithTransactions,
+    staleTime: 10 * 60 * 1000,      // 10 minutes fresh
+    gcTime: 30 * 60 * 1000,          // 30 minutes cache retention
+    retry: 2,
+    refetchOnWindowFocus: false,     // Already disabled in queryClient
+  });
+
+  // Subscribe to real-time changes
   useEffect(() => {
     let creditsSubscription;
-    getCurrentUser();
-    fetchCustomers();
 
-    // Subscribe to real-time changes in credits table
-    creditsSubscription = supabase
-      .channel('credits-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'credits',
-      }, (payload) => {
-        fetchCustomerTransactions();
-      })
-      .subscribe();
+    try {
+      creditsSubscription = supabase
+        .channel('credits-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'credits',
+        }, () => {
+          // Refetch on changes (will use cache if fresh)
+          refetch();
+        })
+        .subscribe();
+    } catch (err) {
+      console.error("Error setting up subscription:", err);
+    }
 
     return () => {
       if (creditsSubscription) supabase.removeChannel(creditsSubscription);
     };
-  }, []);
-
-  useEffect(() => {
-    if (customers.length > 0) {
-      fetchCustomerTransactions();
-    }
-  }, [customers]);
-
-  const getCurrentUser = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    } catch (error) {
-      console.error("Error getting current user:", error);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("created_by", user?.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setCustomers(data || []);
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch customers",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCustomerTransactions = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Fetch credits and payments for all customers
-      const { data: credits, error: creditsError } = await supabase
-        .from("credits")
-        .select(`
-          *,
-          payments (*)
-        `)
-        .eq("issued_by", user?.id);
-
-      if (creditsError) throw creditsError;
-
-      // Calculate transaction summary for each customer
-      const transactionData = {};
-      
-      customers.forEach(customer => {
-        const customerCredits = credits?.filter(credit => credit.customer_id === customer.id) || [];
-        const totalCredit = customerCredits.reduce((sum, credit) => sum + parseFloat(credit.amount || 0), 0);
-        const totalPayments = customerCredits.reduce((sum, credit) => {
-          const creditPayments = credit.payments || [];
-          return sum + creditPayments.reduce((paySum, payment) => paySum + parseFloat(payment.amount || 0), 0);
-        }, 0);
-        
-        const outstanding = totalCredit - totalPayments;
-        let status = 'paid';
-        if (outstanding > 0) status = 'partial';
-        if (totalPayments === 0 && totalCredit > 0) status = 'pending';
-        if (outstanding > totalCredit * 0.8) status = 'defaulter';
-        
-        transactionData[customer.id] = {
-          totalCredit,
-          totalPayments,
-          outstanding,
-          status,
-          credits: customerCredits
-        };
-      });
-
-      setCustomerTransactions(transactionData);
-    } catch (error) {
-      console.error("Error fetching transactions:", error);
-    }
-  };
+  }, [refetch]);
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
@@ -177,7 +115,7 @@ const Customers = () => {
       });
 
       setIsAddDialogOpen(false);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
       e.target.reset();
     } catch (error) {
       console.error("Error adding customer:", error);
@@ -222,7 +160,7 @@ const Customers = () => {
       setEditingCustomer(null);
       setEditConfirmOpen(false);
       setPendingEditData(null);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
     } catch (error) {
       console.error("Error updating customer:", error);
       toast({
@@ -255,7 +193,7 @@ const Customers = () => {
 
       setDeleteConfirmOpen(false);
       setCustomerToDelete(null);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
     } catch (error) {
       console.error("Error deleting customer:", error);
       toast({
@@ -392,7 +330,7 @@ const Customers = () => {
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-8 animate-fade-in">
         <div className="flex justify-between items-center">
@@ -415,6 +353,24 @@ const Customers = () => {
             </Card>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">My Customers</h1>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 font-semibold">Error loading customers</div>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -521,13 +477,6 @@ const Customers = () => {
       ) : (
         <div className="responsive-grid">
           {filteredCustomers.map((customer) => {
-            const transactions = customerTransactions[customer.id] || { 
-              totalCredit: 0, 
-              totalPayments: 0, 
-              outstanding: 0, 
-              status: 'paid' 
-            };
-            
             return (
             <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
               <CardHeader className="pb-3 sm:pb-4">
@@ -611,15 +560,15 @@ const Customers = () => {
                 {/* Transaction Summary */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
                   <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{transactions.totalCredit.toFixed(0)}</div>
+                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{customer.total_credit.toFixed(0)}</div>
                     <div className="text-[10px] sm:text-xs text-blue-500">Credit</div>
                   </div>
                   <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{transactions.totalPayments.toFixed(0)}</div>
+                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{customer.total_payments.toFixed(0)}</div>
                     <div className="text-[10px] sm:text-xs text-green-500">Paid</div>
                   </div>
                   <div className="text-center p-1.5 sm:p-2 bg-orange-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{transactions.outstanding.toFixed(0)}</div>
+                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{customer.outstanding.toFixed(0)}</div>
                     <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
                   </div>
                 </div>

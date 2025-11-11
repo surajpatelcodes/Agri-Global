@@ -137,12 +137,12 @@ All colors MUST be HSL.
   }
   
   html {
-    scroll-behavior: smooth;
-    overflow: hidden;
+  scroll-behavior: smooth;
   }
   
   body {
-    overflow: hidden;
+  /* allow scrolling on small screens so forms and dialogs aren't clipped */
+  overflow: auto;
   }
   
   /* Custom scrollbar styling */

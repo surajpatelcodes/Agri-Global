@@ -99,6 +99,7 @@ CREATE OR REPLACE FUNCTION public.check_customer_credit_status(
   _aadhar_number text
 )
 RETURNS TABLE(
+  customer_name text,
   has_credit boolean,
   is_defaulter boolean,
   outstanding_range text,
@@ -111,6 +112,7 @@ SET search_path = public
 AS $$
 DECLARE
   _customer_id bigint;
+  _customer_name text;
   _total_outstanding numeric;
   _total_shops integer;
 BEGIN
@@ -123,7 +125,7 @@ BEGIN
   );
 
   -- Find customer by Aadhar
-  SELECT id INTO _customer_id
+  SELECT id, name INTO _customer_id, _customer_name
   FROM public.customers
   WHERE id_proof = _aadhar_number
   LIMIT 1;
@@ -131,6 +133,7 @@ BEGIN
   -- If customer not found, return safe defaults
   IF _customer_id IS NULL THEN
     RETURN QUERY SELECT
+      'Unknown'::text,
       false::boolean,
       false::boolean,
       'No Credit History'::text,
@@ -150,6 +153,7 @@ BEGIN
 
   -- Return privacy-preserving summary
   RETURN QUERY SELECT
+    _customer_name::text as customer_name,
     (_total_outstanding > 0)::boolean as has_credit,
     (_total_outstanding > 10000)::boolean as is_defaulter,
     CASE

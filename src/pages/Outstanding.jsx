@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,36 +10,32 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, TrendingUp, User, Phone, DollarSign, ArrowLeft } from "lucide-react";
 
 const Outstanding = () => {
-  const [outstandingData, setOutstandingData] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchOutstandingData();
-  }, []);
-
+  // Fetch outstanding data using optimized SQL function
   const fetchOutstandingData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("customer_outstanding")
-        .select("*")
-        .order("outstanding", { ascending: false });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
 
-      if (error) throw error;
-      setOutstandingData(data || []);
-    } catch (error) {
-      console.error("Error fetching outstanding data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch outstanding balances",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await supabase.rpc('get_outstanding_summary', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
   };
+
+  // Use React Query for caching
+  const { data: outstandingData = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['outstanding-summary'],
+    queryFn: fetchOutstandingData,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -62,7 +59,7 @@ const Outstanding = () => {
   const totalOutstanding = outstandingData.reduce((sum, customer) => sum + Number(customer.outstanding || 0), 0);
   const customersWithOutstanding = outstandingData.filter(customer => Number(customer.outstanding) > 0).length;
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -90,6 +87,24 @@ const Outstanding = () => {
             </Card>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Outstanding Balances</h1>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 font-semibold">Error loading outstanding data</div>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

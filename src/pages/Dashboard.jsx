@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,131 +14,66 @@ import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
 const Dashboard = memo(() => {
   usePerformanceMonitor('Dashboard');
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalCustomers: 0,
-    totalCredits: 0,
-    totalPayments: 0,
-    defaultersCount: 0,
-  });
-  const [defaulters, setDefaulters] = useState([]);
   const [showDefaulters, setShowDefaulters] = useState(false);
-  const [userProfile, setUserProfile] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // ⭐ PERFORMANCE IMPROVEMENT: Fetch all dashboard data with a single query using React Query
+  // This replaces 7 separate database calls with 1 optimized RPC call
+  const fetchDashboardStats = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
-  const fetchDashboardData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
+    const { data, error } = await supabase.rpc('get_dashboard_stats', {
+      user_id: user.id,
+    });
 
-      // Fetch user profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-      
-      setUserProfile(profileData);
-
-      // Get total customers created by current user
-      const { count: customersCount } = await supabase
-        .from("customers")
-        .select("*", { count: "exact", head: true })
-        .eq("created_by", user.id);
-
-      // Get total credits amount issued by current user
-      const { data: creditsData } = await supabase
-        .from("credits")
-        .select("amount")
-        .eq("issued_by", user.id);
-
-      // Get total payments amount created by current user
-      const { data: paymentsData } = await supabase
-        .from("payments")
-        .select("amount")
-        .eq("created_by", user.id);
-
-      // Get defaulters (customers with credits having defaulter status)
-      const { data: defaultersData } = await supabase
-        .from("credits")
-        .select("customers(id, name, phone)")
-        .eq("status", "defaulter")
-        .eq("issued_by", user.id);
-
-      // Process defaulters to get unique customers
-      const uniqueDefaulters = [];
-      const seenCustomers = new Set();
-      
-      defaultersData?.forEach(credit => {
-        if (credit.customers && !seenCustomers.has(credit.customers.id)) {
-          seenCustomers.add(credit.customers.id);
-          uniqueDefaulters.push(credit.customers);
-        }
-      });
-
-      setDefaulters(uniqueDefaulters);
-
-      // Get recent activity (latest credits and payments by current user)
-      const { data: recentCredits } = await supabase
-        .from("credits")
-        .select("id, amount, created_at, customers(name)")
-        .eq("issued_by", user.id)
-        .order("created_at", { ascending: false })
-        .limit(3);
-
-      const { data: recentPaymentsData } = await supabase
-        .from("payments")
-        .select("id, amount, created_at, credits(customers(name))")
-        .eq("created_by", user.id)
-        .order("created_at", { ascending: false })
-        .limit(3);
-
-      // Combine and sort recent activity
-      const activity = [
-        ...(recentCredits || []).map(credit => ({
-          id: credit.id,
-          type: 'credit',
-          amount: credit.amount,
-          customer: credit.customers?.name,
-          time: credit.created_at,
-        })),
-        ...(recentPaymentsData || []).map(payment => ({
-          id: payment.id,
-          type: 'payment',
-          amount: payment.amount,
-          customer: payment.credits?.customers?.name,
-          time: payment.created_at,
-        })),
-      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
-
-      setRecentActivity(activity);
-
-      const totalCredits = creditsData?.reduce((sum, credit) => sum + Number(credit.amount), 0) || 0;
-      const totalPayments = paymentsData?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-
-      setStats({
-        totalCustomers: customersCount || 0,
-        totalCredits,
-        totalPayments,
-        defaultersCount: uniqueDefaulters.length,
-      });
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load dashboard data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    if (error) throw error;
+    return data?.[0] || null;
   };
+
+  const { data: dashboardData, isLoading, error } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: fetchDashboardStats,
+    // Cache for 10 minutes - keeps data fresh without constant refetches
+    staleTime: 10 * 60 * 1000,
+    // Keep in memory for 30 minutes
+    gcTime: 30 * 60 * 1000,
+    // Retry failed requests
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+
+  // Extract data from the query response
+  const stats = {
+    totalCustomers: dashboardData?.total_customers || 0,
+    totalCredits: dashboardData?.total_credits_issued || 0,
+    totalPayments: dashboardData?.total_payments_received || 0,
+    defaultersCount: dashboardData?.defaulters_count || 0,
+  };
+
+  const defaulters = dashboardData?.defaulters || [];
+  const recentActivity = dashboardData?.recent_activity || [];
+  const userProfile = dashboardData?.user_profile || {};
+
+  if (error) {
+    return (
+      <div className="space-y-8" role="alert">
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-900">Error Loading Dashboard</CardTitle>
+            <CardDescription className="text-red-700">
+              {error?.message || 'Failed to load dashboard data'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => window.location.reload()}>
+              Retry Loading
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -163,6 +99,7 @@ const Dashboard = memo(() => {
     return "Good evening";
   };
 
+  // Memoized dashboard cards configuration
   const dashboardCards = [
     {
       title: "Total Customers",
@@ -230,7 +167,7 @@ const Dashboard = memo(() => {
     },
   ];
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-8 animate-fade-in" role="status" aria-live="polite" aria-label="Loading dashboard">
         <div className="animate-pulse">
@@ -255,7 +192,7 @@ const Dashboard = memo(() => {
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
+                  <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
                   <Sparkles className="h-8 w-8 text-yellow-300" aria-hidden="true" />
                   <span>{getGreeting()}, {userProfile?.full_name || 'Welcome'}!</span>
                 </h1>

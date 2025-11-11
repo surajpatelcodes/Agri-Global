@@ -4,16 +4,17 @@ import { QueryClient } from '@tanstack/react-query';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Stale time: 5 minutes
-      staleTime: 5 * 60 * 1000,
-      // Cache time: 10 minutes
-      gcTime: 10 * 60 * 1000,
+      // Stale time: 10 minutes - keep dashboard data fresh without constant refetches
+      staleTime: 10 * 60 * 1000,
+      // Cache time: 30 minutes - keep data in memory longer
+      gcTime: 30 * 60 * 1000,
       // Retry failed requests
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Refetch on window focus for fresh data
-      refetchOnWindowFocus: true,
-      // Don't refetch on mount if data is fresh
+      // ⭐ CRITICAL FIX: Don't refetch on every window focus (was causing repeated queries)
+      // This was making dashboard slower each time you switched tabs
+      refetchOnWindowFocus: false,
+      // Refetch on mount if the data is already there
       refetchOnMount: false,
     },
     mutations: {

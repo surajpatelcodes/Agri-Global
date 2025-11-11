@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +19,6 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const Credits = () => {
-  const [credits, setCredits] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isPartialPaymentDialogOpen, setIsPartialPaymentDialogOpen] = useState(false);
@@ -28,89 +26,116 @@ const Credits = () => {
   const [partialPaymentDate, setPartialPaymentDate] = useState(new Date());
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
-  const [userId, setUserId] = useState("");
   const [defaulterConfirmOpen, setDefaulterConfirmOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [creditHistoryDialogOpen, setCreditHistoryDialogOpen] = useState(false);
   const [selectedCustomerHistory, setSelectedCustomerHistory] = useState(null);
+  const [creditHistoryData, setCreditHistoryData] = useState([]);
+  const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  
+  const queryClient = useQueryClient();
+
+  // Fetch credits summary using optimized SQL function
+  const fetchCreditsSummary = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase.rpc('get_customer_credits_summary', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
+  };
+
+  // Fetch customers with credit using optimized SQL function
+  const fetchCustomersWithCredit = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase.rpc('get_all_customers', {
+      user_id: user.id
+    });
+
+    if (error) throw error;
+    return data || [];
+  };
+
+  // Fetch customer credit history
+  const fetchCreditHistory = async (customerId) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    setCreditHistoryLoading(true);
+    try {
+      console.log("Fetching credit history for customer:", customerId, "user:", user.id);
+      
+      const { data, error } = await supabase.rpc('get_customer_credit_history', {
+        customer_id: customerId,
+        user_id: user.id
+      });
+
+      console.log("Credit history response:", { data, error });
+
+      if (error) throw error;
+      setCreditHistoryData(data || []);
+    } catch (error) {
+      console.error("Error fetching credit history:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch credit history: " + error.message,
+        variant: "destructive",
+      });
+      setCreditHistoryData([]);
+    } finally {
+      setCreditHistoryLoading(false);
+    }
+  };
+
+  // Use React Query for credits summary
+  const { data: creditsSummary = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['credits-summary'],
+    queryFn: fetchCreditsSummary,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
+
+  // Use React Query for customers with credit
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers-with-credit'],
+    queryFn: fetchCustomersWithCredit,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
+
+  // Subscribe to real-time changes
   useEffect(() => {
     let creditsSubscription;
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id);
-    };
-    fetchUser();
-    fetchCredits();
-    fetchCustomers();
 
-    // Subscribe to real-time changes in credits table
-    creditsSubscription = supabase
-      .channel('credits-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'credits',
-      }, (payload) => {
-        fetchCredits();
-      })
-      .subscribe();
+    try {
+      creditsSubscription = supabase
+        .channel('credits-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'credits',
+        }, () => {
+          refetch();
+        })
+        .subscribe();
+    } catch (err) {
+      console.error("Error setting up subscription:", err);
+    }
 
     return () => {
       if (creditsSubscription) supabase.removeChannel(creditsSubscription);
     };
-  }, []);
-
-  const fetchCredits = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from("credits")
-        .select(`
-          *,
-          customers!inner (
-            id,
-            name,
-            phone,
-            created_by
-          )
-        `)
-        .eq("customers.created_by", user?.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setCredits(data || []);
-    } catch (error) {
-      console.error("Error fetching credits:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch credits",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from("customers")
-        .select("id, name, id_proof")
-        .eq("created_by", user?.id)
-        .order("name");
-
-      if (error) throw error;
-      setCustomers(data || []);
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-    }
-  };
+  }, [refetch]);
 
   const handleAddCredit = async (e) => {
     e.preventDefault();
@@ -139,7 +164,8 @@ const Credits = () => {
       });
 
       setIsAddDialogOpen(false);
-      fetchCredits();
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
       e.target.reset();
     } catch (error) {
       console.error("Error adding credit:", error);
@@ -154,7 +180,7 @@ const Credits = () => {
   const handleStatusChange = async (creditId, newStatus) => {
     if (newStatus === "partial") {
       // Open partial payment dialog instead of directly updating status
-      const credit = credits.find(c => c.id === creditId);
+      const credit = creditsSummary.find(c => c.customer_id === creditId);
       setSelectedCreditForPartial(credit);
       setIsPartialPaymentDialogOpen(true);
       return;
@@ -180,7 +206,7 @@ const Credits = () => {
         description: "Credit status updated successfully",
       });
 
-      fetchCredits();
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -209,7 +235,7 @@ const Credits = () => {
 
       setDefaulterConfirmOpen(false);
       setPendingStatusChange(null);
-      fetchCredits();
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -256,7 +282,7 @@ const Credits = () => {
 
       setIsPartialPaymentDialogOpen(false);
       setSelectedCreditForPartial(null);
-      fetchCredits();
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
       e.target.reset();
     } catch (error) {
       console.error("Error recording partial payment:", error);
@@ -307,27 +333,11 @@ const Credits = () => {
     return new Date(dateString).toLocaleDateString('en-IN');
   };
 
-  const filteredCredits = credits.filter(credit =>
-    credit.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    credit.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCredits = creditsSummary.filter(credit =>
+    credit.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group credits by unique customers
-  const uniqueCustomers = filteredCredits.reduce((acc, credit) => {
-    const customerId = credit.customer_id;
-    if (!acc[customerId]) {
-      acc[customerId] = {
-        customer: credit.customers,
-        credits: []
-      };
-    }
-    acc[customerId].credits.push(credit);
-    return acc;
-  }, {});
-
-  const customersList = Object.values(uniqueCustomers);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -346,6 +356,24 @@ const Credits = () => {
             </Card>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Credits</h1>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 font-semibold">Error loading credits</div>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -457,7 +485,7 @@ const Credits = () => {
         />
       </div>
 
-      {customersList.length === 0 ? (
+      {filteredCredits.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -475,29 +503,29 @@ const Credits = () => {
         </Card>
       ) : (
         <div className="space-y-4">
-          {customersList.map(({ customer, credits: customerCredits }) => (
-            <Card key={customer?.id} className="hover:shadow-lg transition-shadow">
+          {filteredCredits.map((creditSummary) => (
+            <Card key={creditSummary.customer_id} className="hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
                       <div className="flex items-center space-x-2">
                         <User className="h-4 w-4 text-gray-500" />
-                        <span className="font-semibold">{customer?.name}</span>
+                        <span className="font-semibold">{creditSummary.customer_name}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <DollarSign className="h-4 w-4 text-gray-500" />
                         <span className="font-bold text-lg">
-                          {formatCurrency(customerCredits.reduce((sum, c) => sum + parseFloat(c.amount), 0))}
+                          {formatCurrency(creditSummary.total_credit_amount)}
                         </span>
                       </div>
                       <Badge variant="secondary">
-                        {customerCredits.length} {customerCredits.length === 1 ? 'Credit' : 'Credits'}
+                        {creditSummary.credit_count} {creditSummary.credit_count === 1 ? 'Credit' : 'Credits'}
                       </Badge>
                     </div>
                     
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <span>Phone: {customer?.phone}</span>
+                      <span>Phone: {creditSummary.customer_phone}</span>
                     </div>
                   </div>
                   
@@ -505,9 +533,10 @@ const Credits = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        setSelectedCustomerHistory({ name: customer?.name, credits: customerCredits });
+                      onClick={async () => {
+                        setSelectedCustomerHistory({ name: creditSummary.customer_name, customer_id: creditSummary.customer_id });
                         setCreditHistoryDialogOpen(true);
+                        await fetchCreditHistory(creditSummary.customer_id);
                       }}
                     >
                       Credit History
@@ -642,42 +671,56 @@ const Credits = () => {
             <DialogHeader className="p-4 relative pt-6">
               <div className="flex items-center gap-3">
                 <DialogTitle>Credit History - {selectedCustomerHistory?.name}</DialogTitle>
-                {selectedCustomerHistory?.credits && (
-                  <Badge className={getStatusColor(computeCustomerStatus(selectedCustomerHistory?.credits))}>
-                    {(() => {
-                      const s = computeCustomerStatus(selectedCustomerHistory?.credits);
-                      return s.charAt(0).toUpperCase() + s.slice(1);
-                    })()}
-                  </Badge>
-                )}
               </div>
               <DialogDescription>
                 Complete credit transaction history for this customer
               </DialogDescription>
-
-              {/* Header close button removed; global dialog close button is used instead */}
             </DialogHeader>
           </div>
 
           {/* Scrollable transactions list */}
           <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 6.5rem)' }}>
-            <div className="space-y-4">
-              {selectedCustomerHistory?.credits?.map((credit) => (
-                <Card key={credit.id}>
-                  <CardContent className="p-4">
-                    <div className="mb-2">
-                      <div>
-                        <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
-                        <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
+            {creditHistoryLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i}>
+                    <CardContent className="p-4">
+                      <div className="animate-pulse space-y-3">
+                        <div className="h-4 bg-gray-200 rounded"></div>
+                        <div className="h-3 bg-gray-200 rounded"></div>
+                        <div className="h-3 bg-gray-200 rounded w-2/3"></div>
                       </div>
-                    </div>
-                    {credit.description && (
-                      <p className="text-sm text-gray-600">{credit.description}</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : creditHistoryData.length === 0 ? (
+              <div className="text-center py-8">
+                <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No credits found for this customer</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {creditHistoryData.map((credit) => (
+                  <Card key={credit.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
+                          <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
+                          {credit.description && (
+                            <p className="text-sm text-gray-600 mt-2">{credit.description}</p>
+                          )}
+                        </div>
+                        <Badge className={getStatusColor(credit.status)}>
+                          {credit.status?.charAt(0).toUpperCase() + credit.status?.slice(1)}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

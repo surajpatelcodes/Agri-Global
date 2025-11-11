@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Leaf, Sparkles, ShoppingBag, Users } from "lucide-react";
+import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff } from "lucide-react";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -123,149 +125,180 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-3 sm:px-4 md:px-4 py-4 relative overflow-hidden">
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Decorative background - hide on small screens to save vertical space */}
+      <div className="hidden sm:block absolute inset-0 overflow-hidden">
         <div className="absolute -top-1/2 -right-1/2 w-96 h-96 bg-green-200 rounded-full opacity-20 animate-pulse"></div>
         <div className="absolute -bottom-1/2 -left-1/2 w-96 h-96 bg-emerald-200 rounded-full opacity-20 animate-pulse delay-1000"></div>
         <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-teal-200 rounded-full opacity-30 float"></div>
         <div className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-green-300 rounded-full opacity-40 float delay-500"></div>
       </div>
 
-      <div className="w-full max-w-md relative z-10">
+  <div className="w-full max-w-xs sm:max-w-sm md:max-w-md relative z-10">
         {/* Header Section */}
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="flex justify-center mb-6">
+        <div className="text-center mb-4 sm:mb-6 md:mb-8 animate-fade-in">
+          <div className="flex justify-center mb-3 sm:mb-4 md:mb-6">
             <div className="relative">
-              <div className="p-4 bg-gradient-primary rounded-2xl shadow-glow pulse-glow">
-                <Leaf className="h-10 w-10 text-white" />
+              <div className="p-2 sm:p-3 md:p-4 bg-gradient-primary rounded-2xl shadow-glow pulse-glow">
+                <Leaf className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-white" />
               </div>
               <div className="absolute -top-1 -right-1">
-                <Sparkles className="h-5 w-5 text-yellow-400 animate-pulse" />
+                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 md:h-5 md:w-5 text-yellow-400 animate-pulse" />
               </div>
             </div>
           </div>
-          <h1 className="text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
             A.I.A.D.A
           </h1>
-          <p className="text-gray-600 text-lg">ALL INDIA AGRICULTURE DEALERS ASSOCIATION</p>
-          <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-500">
+          <p className="text-gray-600 text-xs sm:text-sm md:text-lg leading-tight sm:leading-normal">ALL INDIA AGRICULTURE DEALERS ASSOCIATION</p>
+          <div className="hidden sm:flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-2 sm:mt-4 text-xs sm:text-sm text-gray-500">
             <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              <span>Cross-Shop Customer Credit Checking</span>
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden md:inline">Cross-Shop Customer Credit Checking</span>
+              <span className="md:hidden">Credit Checking</span>
             </div>
             <div className="flex items-center gap-1">
-              <ShoppingBag className="h-4 w-4" />
-              <span>Multi-Store Support</span>
+              <ShoppingBag className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden md:inline">Multi-Store Support</span>
+              <span className="md:hidden">Multi-Store</span>
             </div>
           </div>
         </div>
 
         {/* Auth Card */}
-        <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-heading">Welcome</CardTitle>
-            <CardDescription className="text-base">
+        <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in p-3 sm:p-4 md:p-6">
+          <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
+            <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">Welcome</CardTitle>
+            <CardDescription className="text-xs sm:text-sm md:text-base">
               Sign in to your account or create a new one to get started.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-100/50 backdrop-blur-sm">
-                <TabsTrigger value="login" className="font-medium">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" className="font-medium">Sign Up</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 bg-gray-100/50 backdrop-blur-sm h-9 sm:h-10">
+                <TabsTrigger value="login" className="font-medium text-xs sm:text-sm">Sign In</TabsTrigger>
+                <TabsTrigger value="signup" className="font-medium text-xs sm:text-sm">Sign Up</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="login" className="mt-6">
-                <form onSubmit={handleLogin} className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email" className="text-sm font-medium">Email</Label>
+              <TabsContent value="login" className="mt-4 sm:mt-5 md:mt-6">
+                <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4 md:space-y-5">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="login-email" className="text-xs sm:text-sm font-medium">Email</Label>
                     <Input
                       id="login-email"
                       name="email"
                       type="email"
                       placeholder="Enter your email"
-                      className="h-11 border-gray-200 focus:border-green-500 transition-colors"
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password" className="text-sm font-medium">Password</Label>
-                    <Input
-                      id="login-password"
-                      name="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      className="h-11 border-gray-200 focus:border-green-500 transition-colors"
-                      required
-                    />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="login-password" className="text-xs sm:text-sm font-medium">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="login-password"
+                        name="password"
+                        type={showLoginPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showLoginPassword ? (
+                          <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                        ) : (
+                          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <Button type="submit" className="w-full h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
                     Sign In
                   </Button>
                 </form>
               </TabsContent>
               
-              <TabsContent value="signup" className="mt-6">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-name" className="text-sm font-medium">Full Name</Label>
+              <TabsContent value="signup" className="mt-4 sm:mt-5 md:mt-6">
+                <form onSubmit={handleSignUp} className="space-y-3 sm:space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-name" className="text-xs sm:text-sm font-medium">Full Name</Label>
                       <Input
                         id="signup-name"
                         name="fullName"
                         placeholder="Enter your full name"
-                        className="h-11 border-gray-200 focus:border-green-500 transition-colors"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-shop" className="text-sm font-medium">Shop Name</Label>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-shop" className="text-xs sm:text-sm font-medium">Shop Name</Label>
                       <Input
                         id="signup-shop"
                         name="shopName"
                         placeholder="Enter your shop name"
-                        className="h-11 border-gray-200 focus:border-green-500 transition-colors"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-phone" className="text-sm font-medium">Phone Number</Label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
                     <Input
                       id="signup-phone"
                       name="phone"
                       type="tel"
                       placeholder="Enter your phone number"
-                      className="h-11 border-gray-200 focus:border-green-500 transition-colors"
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-sm font-medium">Email Address</Label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="signup-email" className="text-xs sm:text-sm font-medium">Email Address</Label>
                     <Input
                       id="signup-email"
                       name="email"
                       type="email"
                       placeholder="Enter your email"
-                      className="h-11 border-gray-200 focus:border-green-500 transition-colors"
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-sm font-medium">Password</Label>
-                    <Input
-                      id="signup-password"
-                      name="password"
-                      type="password"
-                      placeholder="Create a password"
-                      className="h-11 border-gray-200 focus:border-green-500 transition-colors"
-                      required
-                    />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="signup-password" className="text-xs sm:text-sm font-medium">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        name="password"
+                        type={showSignupPassword ? "text" : "password"}
+                        placeholder="Create a password"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupPassword(!showSignupPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showSignupPassword ? (
+                          <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                        ) : (
+                          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <Button type="submit" className="w-full h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
                     Create Account
                   </Button>
                 </form>
@@ -275,7 +308,7 @@ const Auth = () => {
         </Card>
         
         {/* Footer */}
-        <div className="text-center mt-6 text-sm text-gray-500">
+        <div className="text-center mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">
           <p>Connecting agricultural businesses across networks</p>
         </div>
       </div>

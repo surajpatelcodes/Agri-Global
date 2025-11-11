@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,41 +19,39 @@ const Profile = () => {
     license_number: "",
     shop_owner: ""
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch profile using React Query
+  const fetchProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  };
+
+  const { data: profileData, isLoading, error } = useQuery({
+    queryKey: ['profile'],
+    queryFn: fetchProfile,
+    staleTime: 30 * 60 * 1000,    // 30 minutes for profile
+    gcTime: 60 * 60 * 1000,        // 60 minutes cache retention
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      if (data) {
-        setProfile(data);
-      }
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch profile data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+    if (profileData) {
+      setProfile(profileData);
     }
-  };
+  }, [profileData]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -82,6 +81,7 @@ const Profile = () => {
       });
     } finally {
       setSaving(false);
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     }
   };
 
@@ -92,7 +92,7 @@ const Profile = () => {
     }));
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
@@ -108,6 +108,21 @@ const Profile = () => {
                   <div className="h-10 bg-gray-200 rounded"></div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Profile Management</h1>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 font-semibold">Error loading profile</div>
             </div>
           </CardContent>
         </Card>
