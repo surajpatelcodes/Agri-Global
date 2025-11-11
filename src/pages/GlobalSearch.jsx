@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 
 const GlobalSearch = () => {
@@ -14,6 +14,7 @@ const GlobalSearch = () => {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
 
   // Debounce the search term for real-time validation
@@ -100,6 +101,46 @@ const GlobalSearch = () => {
     }
   };
 
+  // Refresh the search results to get latest data
+  const handleRefresh = async () => {
+    if (!searchResult || !searchTerm) return;
+    
+    setRefreshing(true);
+    try {
+      const { data, error } = await supabase
+        .rpc("check_customer_credit_status", {
+          _aadhar_number: searchTerm.trim()
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0 || data[0]?.outstanding_range === 'No Credit History') {
+        setSearchResult(null);
+        toast({
+          title: "No Results",
+          description: "No customer found with this Aadhar number",
+        });
+        return;
+      }
+
+      setSearchResult(data[0]);
+      toast({
+        title: "Refreshed",
+        description: "Customer information updated with latest data",
+      });
+    } catch (error) {
+      console.error("Error refreshing customer data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh customer data",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const getRiskColor = (riskLevel) => {
     switch (riskLevel) {
@@ -198,10 +239,22 @@ const GlobalSearch = () => {
               {/* Credit Status Overview */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5" />
-                    {searchResult.customer_name} - Credit Status Summary
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5" />
+                      {searchResult.customer_name} - Credit Status Summary
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      {refreshing ? 'Updating...' : 'Refresh'}
+                    </Button>
+                  </div>
                   <CardDescription>
                     Privacy-preserving summary of customer credit across all shops
                   </CardDescription>

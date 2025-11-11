@@ -53,14 +53,22 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Calculate total outstanding across all shops
+  -- Calculate total outstanding across all shops (properly grouping by credit)
   SELECT 
-    COALESCE(SUM(cr.amount), 0) - COALESCE(SUM(p.amount), 0),
-    COUNT(DISTINCT cr.issued_by)
+    COALESCE(SUM(total_credit), 0) - COALESCE(SUM(total_paid), 0),
+    COUNT(DISTINCT shop_id)
   INTO _total_outstanding, _total_shops
-  FROM public.credits cr
-  LEFT JOIN public.payments p ON p.credit_id = cr.id
-  WHERE cr.customer_id = _customer_id;
+  FROM (
+    SELECT
+      cr.id as credit_id,
+      cr.issued_by as shop_id,
+      cr.amount as total_credit,
+      COALESCE(SUM(p.amount), 0) as total_paid
+    FROM public.credits cr
+    LEFT JOIN public.payments p ON p.credit_id = cr.id
+    WHERE cr.customer_id = _customer_id
+    GROUP BY cr.id, cr.issued_by, cr.amount
+  ) credit_summary;
 
   -- Return privacy-preserving summary
   RETURN QUERY SELECT
