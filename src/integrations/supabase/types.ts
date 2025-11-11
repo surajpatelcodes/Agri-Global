@@ -329,6 +329,7 @@ export type Database = {
       check_customer_credit_status: {
         Args: { _aadhar_number: string }
         Returns: {
+          customer_name: string
           has_credit: boolean
           is_defaulter: boolean
           outstanding_range: string
@@ -336,8 +337,113 @@ export type Database = {
           total_shops: number
         }[]
       }
+      get_all_customers: {
+        Args: { user_id: string }
+        Returns: {
+          id: number
+          id_proof: string
+          name: string
+          phone: string
+        }[]
+      }
+      get_all_payments_with_details: {
+        Args: { user_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string
+          credit_amount: number
+          credit_description: string
+          credit_id: number
+          customer_id_proof: string
+          customer_name: string
+          customer_phone: string
+          id: number
+          payment_date: string
+          payment_method: string
+        }[]
+      }
+      get_customer_credit_history: {
+        Args: { customer_id: number; user_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          description: string
+          id: number
+          status: string
+        }[]
+      }
+      get_customer_credits_summary: {
+        Args: { user_id: string }
+        Returns: {
+          credit_count: number
+          customer_id: number
+          customer_name: string
+          customer_phone: string
+          latest_credit_date: string
+          status: string
+          total_credit_amount: number
+        }[]
+      }
       get_customer_outstanding: {
         Args: never
+        Returns: {
+          customer_id: number
+          name: string
+          outstanding: number
+          phone: string
+          total_credit: number
+          total_payments: number
+        }[]
+      }
+      get_customer_transactions: {
+        Args: { user_id: string }
+        Returns: {
+          address: string
+          created_at: string
+          created_by_current_user: boolean
+          id: number
+          id_proof: string
+          name: string
+          outstanding: number
+          phone: string
+          status: string
+          total_credit: number
+          total_payments: number
+        }[]
+      }
+      get_customers_with_credit: {
+        Args: { user_id: string }
+        Returns: {
+          id: number
+          id_proof: string
+          name: string
+          phone: string
+        }[]
+      }
+      get_customers_with_pending_credits: {
+        Args: { user_id: string }
+        Returns: {
+          id: number
+          id_proof: string
+          name: string
+          phone: string
+        }[]
+      }
+      get_dashboard_stats: {
+        Args: { user_id: string }
+        Returns: {
+          defaulters: Json
+          defaulters_count: number
+          recent_activity: Json
+          total_credits_issued: number
+          total_customers: number
+          total_payments_received: number
+          user_profile: Json
+        }[]
+      }
+      get_outstanding_summary: {
+        Args: { user_id: string }
         Returns: {
           customer_id: number
           name: string
