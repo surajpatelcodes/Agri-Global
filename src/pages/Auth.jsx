@@ -46,12 +46,6 @@ const Auth = () => {
     const password = formData.get("password");
 
     try {
-      // Clear any existing session first to prevent credential caching issues
-      await supabase.auth.signOut();
-      
-      // Small delay to ensure session is fully cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -68,8 +62,6 @@ const Auth = () => {
           title: "Welcome back!",
           description: "You have successfully logged in.",
         });
-        // Form will be cleared by redirect
-        e.target.reset();
       }
     } catch (error) {
       toast({

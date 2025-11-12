@@ -103,28 +103,6 @@ const Customers = () => {
         created_by: user?.id,
       };
 
-      // Check if customer with this Aadhaar already exists
-      const { data: existingCustomer, error: checkError } = await supabase
-        .from("customers")
-        .select("id, name, phone, created_by")
-        .eq("id_proof", customerData.id_proof)
-        .maybeSingle();
-
-      if (checkError) throw checkError;
-
-      if (existingCustomer) {
-        toast({
-          title: "Customer Already Exists",
-          description: `A customer with this Aadhaar already exists: ${existingCustomer.name} (${existingCustomer.phone}). ${existingCustomer.created_by === user.id ? 'You can now issue credits to them.' : 'This is a shared customer available across all shops.'}`,
-          duration: 5000,
-        });
-        setIsAddDialogOpen(false);
-        e.target.reset();
-        queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
-        return;
-      }
-
-      // Create new customer if doesn't exist
       const { error } = await supabase
         .from("customers")
         .insert([customerData]);
@@ -133,7 +111,7 @@ const Customers = () => {
 
       toast({
         title: "Success!",
-        description: "Customer added successfully and is now available to all shops",
+        description: "Customer added successfully",
       });
 
       setIsAddDialogOpen(false);
@@ -143,7 +121,7 @@ const Customers = () => {
       console.error("Error adding customer:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to add customer",
+        description: "Failed to add customer",
         variant: "destructive",
       });
     }
@@ -501,23 +479,16 @@ const Customers = () => {
           {filteredCustomers.map((customer) => {
             return (
             <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
-               <CardHeader className="pb-3 sm:pb-4">
+              <CardHeader className="pb-3 sm:pb-4">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex items-start space-x-2 sm:space-x-3 flex-1 min-w-0">
                     <div className="p-2 sm:p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl sm:rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
                       <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base sm:text-lg md:text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300 truncate">
-                          {customer.name}
-                        </CardTitle>
-                        {!customer.created_by_current_user && (
-                          <Badge variant="outline" className="text-[10px] sm:text-xs bg-blue-50 text-blue-600 border-blue-200">
-                            Shared
-                          </Badge>
-                        )}
-                      </div>
+                      <CardTitle className="text-base sm:text-lg md:text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300 truncate">
+                        {customer.name}
+                      </CardTitle>
                       <CardDescription className="text-xs sm:text-sm text-gray-500 font-medium truncate">
                         ID: #{customer.id}
                       </CardDescription>
@@ -527,26 +498,22 @@ const Customers = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingCustomer(customer);
                       }}
-                      disabled={!customer.created_by_current_user}
-                      title={!customer.created_by_current_user ? "Only the shop that created this customer can edit" : "Edit customer"}
                     >
                       <Edit className="h-4 w-4 text-blue-600" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteCustomer(customer);
                       }}
-                      disabled={!customer.created_by_current_user}
-                      title={!customer.created_by_current_user ? "Only the shop that created this customer can delete" : "Delete customer"}
                     >
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
@@ -593,15 +560,15 @@ const Customers = () => {
                 {/* Transaction Summary */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
                   <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate" title="Your total credit issued">₹{customer.total_credit.toFixed(0)}</div>
-                    <div className="text-[10px] sm:text-xs text-blue-500">Your Credit</div>
+                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{customer.total_credit.toFixed(0)}</div>
+                    <div className="text-[10px] sm:text-xs text-blue-500">Credit</div>
                   </div>
                   <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate" title="Your payments received">₹{customer.total_payments.toFixed(0)}</div>
-                    <div className="text-[10px] sm:text-xs text-green-500">Your Paid</div>
+                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{customer.total_payments.toFixed(0)}</div>
+                    <div className="text-[10px] sm:text-xs text-green-500">Paid</div>
                   </div>
                   <div className="text-center p-1.5 sm:p-2 bg-orange-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate" title="Outstanding from your shop">₹{customer.outstanding.toFixed(0)}</div>
+                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{customer.outstanding.toFixed(0)}</div>
                     <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
                   </div>
                 </div>
