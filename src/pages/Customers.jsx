@@ -107,15 +107,65 @@ const Customers = () => {
   const handleAddCustomer = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+      const aadharNumber = formData.get("id_proof");
+
+      // Phase 3: Lookup or create global customer
+      let globalCustomerId;
+
+      // Check if global customer exists for this Aadhar
+      const { data: existingGlobalCustomer, error: lookupError } = await supabase
+        .from("global_customers")
+        .select("id, name, phone")
+        .eq("aadhar_no", aadharNumber)
+        .single();
+
+      if (lookupError && lookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw lookupError;
+      }
+
+      if (existingGlobalCustomer) {
+        // Use existing global customer
+        globalCustomerId = existingGlobalCustomer.id;
+
+        // Optional: Update global customer info if different (but keep existing as primary)
+        const customerName = formData.get("name");
+        const customerPhone = formData.get("phone");
+
+        if (existingGlobalCustomer.name !== customerName || existingGlobalCustomer.phone !== customerPhone) {
+          await supabase
+            .from("global_customers")
+            .update({
+              name: existingGlobalCustomer.name || customerName, // Keep existing if present
+              phone: existingGlobalCustomer.phone || customerPhone // Keep existing if present
+            })
+            .eq("id", globalCustomerId);
+        }
+      } else {
+        // Create new global customer
+        const { data: newGlobalCustomer, error: createError } = await supabase
+          .from("global_customers")
+          .insert([{
+            aadhar_no: aadharNumber,
+            name: formData.get("name"),
+            phone: formData.get("phone")
+          }])
+          .select("id")
+          .single();
+
+        if (createError) throw createError;
+        globalCustomerId = newGlobalCustomer.id;
+      }
+
+      // Create shop-specific customer record
       const customerData = {
         name: formData.get("name"),
         phone: formData.get("phone"),
         address: formData.get("address"),
-        id_proof: formData.get("id_proof"),
+        id_proof: aadharNumber,
+        global_customer_id: globalCustomerId,
         created_by: user?.id,
       };
 
@@ -127,7 +177,9 @@ const Customers = () => {
 
       toast({
         title: "Success!",
-        description: "Customer added successfully",
+        description: existingGlobalCustomer
+          ? "Customer added successfully (existing global record linked)"
+          : "Customer added successfully (new global record created)",
       });
 
       setIsAddDialogOpen(false);
