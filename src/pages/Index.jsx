@@ -7,8 +7,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 const Dashboard = lazy(() => import("./Dashboard"));
 const Customers = lazy(() => import("./Customers"));
 const Credits = lazy(() => import("./Credits"));
-const Payments = lazy(() => import("./Payments"));
-const Outstanding = lazy(() => import("./Outstanding"));
+
 const GlobalSearch = lazy(() => import("./GlobalSearch"));
 const Profile = lazy(() => import("./Profile"));
 const Auth = lazy(() => import("./Auth"));
@@ -23,7 +22,7 @@ const Index = () => {
   // Sync activeTab with URL hash for navigation
   useEffect(() => {
     const hash = location.hash.replace('#', '') || 'dashboard';
-    if (hash !== activeTab && ['dashboard', 'customers', 'credits', 'payments', 'outstanding', 'profile', 'global-search'].includes(hash)) {
+    if (hash !== activeTab && ['dashboard', 'customers', 'credits', 'profile', 'global-search'].includes(hash)) {
       setActiveTab(hash);
     }
     
@@ -74,10 +73,7 @@ const Index = () => {
         return <Customers />;
       case "credits":
         return <Credits />;
-      case "payments":
-        return <Payments />;
-      case "outstanding":
-        return <Outstanding />;
+
       case "global-search":
         return <GlobalSearch />;
       case "profile":

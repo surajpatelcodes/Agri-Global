@@ -65,9 +65,24 @@ const Customers = () => {
 
   // Subscribe to real-time changes
   useEffect(() => {
+    let customersSubscription;
     let creditsSubscription;
 
     try {
+      // Subscribe to customer changes
+      customersSubscription = supabase
+        .channel('customers-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'customers',
+        }, () => {
+          // Refetch on changes (will use cache if fresh)
+          refetch();
+        })
+        .subscribe();
+
+      // Subscribe to credit changes
       creditsSubscription = supabase
         .channel('credits-changes')
         .on('postgres_changes', {
@@ -84,6 +99,7 @@ const Customers = () => {
     }
 
     return () => {
+      if (customersSubscription) supabase.removeChannel(customersSubscription);
       if (creditsSubscription) supabase.removeChannel(creditsSubscription);
     };
   }, [refetch]);

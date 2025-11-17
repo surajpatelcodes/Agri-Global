@@ -61,20 +61,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
       color: "text-purple-600",
       bgColor: "bg-purple-100",
     },
-    {
-      id: "payments",
-      label: "Payments",
-      icon: DollarSign,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100",
-    },
-    {
-      id: "outstanding",
-      label: "Outstanding",
-      icon: TrendingUp,
-      color: "text-red-600",
-      bgColor: "bg-red-100",
-    },
+
     {
       id: "global-search",
       label: "Global Search",
