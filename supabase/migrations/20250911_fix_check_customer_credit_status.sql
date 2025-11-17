@@ -24,6 +24,7 @@ AS $$
 DECLARE
   _customer_id bigint;
   _customer_name text;
+  _is_defaulter boolean;
   _total_outstanding numeric;
   _total_shops integer;
 BEGIN
@@ -54,10 +55,15 @@ BEGIN
   END IF;
 
   -- Calculate total outstanding across all shops (properly grouping by credit)
-  SELECT 
+  -- Check if customer has any defaulter credits first
+  SELECT
+    CASE WHEN EXISTS (
+      SELECT 1 FROM public.credits
+      WHERE customer_id = _customer_id AND status = 'defaulter'
+    ) THEN true ELSE false END,
     COALESCE(SUM(total_credit), 0) - COALESCE(SUM(total_paid), 0),
     COUNT(DISTINCT shop_id)
-  INTO _total_outstanding, _total_shops
+  INTO _is_defaulter, _total_outstanding, _total_shops
   FROM (
     SELECT
       cr.id as credit_id,
@@ -74,7 +80,7 @@ BEGIN
   RETURN QUERY SELECT
     _customer_name::text as customer_name,
     (_total_outstanding > 0)::boolean as has_credit,
-    (_total_outstanding > 10000)::boolean as is_defaulter,
+    _is_defaulter::boolean as is_defaulter,
     CASE
       WHEN _total_outstanding = 0 THEN 'No Outstanding'
       WHEN _total_outstanding <= 5000 THEN 'Low (< ₹5,000)'

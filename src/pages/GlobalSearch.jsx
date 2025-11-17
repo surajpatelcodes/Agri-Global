@@ -83,10 +83,13 @@ const GlobalSearch = () => {
       }
 
       setSearchResult(data[0]);
-      toast({
-        title: "Search Complete",
-        description: "Customer information retrieved successfully",
-      });
+      // Only show toast for non-defaulters, defaulters get prominent display
+      if (!data[0]?.is_defaulter) {
+        toast({
+          title: "Search Complete",
+          description: "Customer information retrieved successfully",
+        });
+      }
 
     } catch (error) {
       console.error("Error searching customer:", error);
@@ -236,60 +239,82 @@ const GlobalSearch = () => {
         <>
           {searchResult ? (
             <div className="space-y-6">
-              {/* Credit Status Overview */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5" />
-                      {searchResult.customer_name} - Credit Status Summary
-                    </CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRefresh}
-                      disabled={refreshing}
-                      className="flex items-center gap-2"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                      {refreshing ? 'Updating...' : 'Refresh'}
-                    </Button>
-                  </div>
-                  <CardDescription>
-                    Privacy-preserving summary of customer credit across all shops
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Has Active Credit</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant={searchResult.has_credit ? "destructive" : "default"}>
-                            {searchResult.has_credit ? "Yes" : "No"}
+              {/* Defaulter Status - Show only if defaulter */}
+              {searchResult.is_defaulter ? (
+                <Card className="border-red-500 bg-red-50">
+                  <CardContent className="p-8 text-center">
+                    <div className="text-6xl font-bold text-red-600 mb-4">DEFAULTER</div>
+                    <div className="text-2xl font-semibold text-red-800">{searchResult.customer_name}</div>
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="flex items-center gap-2 border-red-300 text-red-700 hover:bg-red-100"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        {refreshing ? 'Updating...' : 'Refresh'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                /* Credit Status Overview - Only show for non-defaulters */
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5" />
+                        {searchResult.customer_name} - Credit Status Summary
+                      </CardTitle>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        {refreshing ? 'Updating...' : 'Refresh'}
+                      </Button>
+                    </div>
+                    <CardDescription>
+                      Privacy-preserving summary of customer credit across all shops
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Has Active Credit</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant={searchResult.has_credit ? "destructive" : "default"}>
+                              {searchResult.has_credit ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Outstanding Range</p>
+                          <p className="font-semibold text-lg">{searchResult.outstanding_range}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Total Shops</p>
+                          <p className="font-semibold text-lg">{searchResult.total_shops} Shop{searchResult.total_shops !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Risk Level</p>
+                          <Badge className={getRiskColor(searchResult.risk_level)}>
+                            {searchResult.risk_level}
                           </Badge>
                         </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Outstanding Range</p>
-                        <p className="font-semibold text-lg">{searchResult.outstanding_range}</p>
-                      </div>
                     </div>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Total Shops</p>
-                        <p className="font-semibold text-lg">{searchResult.total_shops} Shop{searchResult.total_shops !== 1 ? 's' : ''}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Risk Level</p>
-                        <Badge className={getRiskColor(searchResult.risk_level)}>
-                          {searchResult.risk_level}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Defaulter Warning */}
               {searchResult.is_defaulter && (

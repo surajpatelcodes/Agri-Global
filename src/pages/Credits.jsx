@@ -177,33 +177,34 @@ const Credits = () => {
     }
   };
 
-  const handleStatusChange = async (creditId, newStatus) => {
+  const handleStatusChange = async (customerId, newStatus) => {
     if (newStatus === "partial") {
       // Open partial payment dialog instead of directly updating status
-      const credit = creditsSummary.find(c => c.customer_id === creditId);
+      const credit = creditsSummary.find(c => c.customer_id === customerId);
       setSelectedCreditForPartial(credit);
       setIsPartialPaymentDialogOpen(true);
       return;
     }
 
     // Show confirmation for defaulter status
-    if (newStatus === "defaulter") {
-      setPendingStatusChange({ creditId, newStatus });
+    if (newStatus === "defaulter" || (newStatus === "pending" && creditsSummary.find(c => c.customer_id === customerId)?.status === "defaulter")) {
+      setPendingStatusChange({ customerId, newStatus });
       setDefaulterConfirmOpen(true);
       return;
     }
 
     try {
+      // Update all credits for this customer
       const { error } = await supabase
         .from("credits")
         .update({ status: newStatus })
-        .eq("id", creditId);
+        .eq("customer_id", customerId);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Credit status updated successfully",
+        description: `Customer ${newStatus === 'defaulter' ? 'marked as defaulter' : 'status updated'} successfully`,
       });
 
       queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
@@ -221,16 +222,17 @@ const Credits = () => {
     if (!pendingStatusChange) return;
 
     try {
+      // Update all credits for this customer
       const { error } = await supabase
         .from("credits")
         .update({ status: pendingStatusChange.newStatus })
-        .eq("id", pendingStatusChange.creditId);
+        .eq("customer_id", pendingStatusChange.customerId);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Credit status updated successfully",
+        description: `Customer ${pendingStatusChange.newStatus === 'defaulter' ? 'marked as defaulter' : 'defaulter status removed'} successfully`,
       });
 
       setDefaulterConfirmOpen(false);
@@ -541,6 +543,19 @@ const Credits = () => {
                     >
                       Credit History
                     </Button>
+
+                    {/* Defaulter Toggle Button */}
+                    <Button
+                      variant={creditSummary.status === 'defaulter' ? "destructive" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        const newStatus = creditSummary.status === 'defaulter' ? 'pending' : 'defaulter';
+                        handleStatusChange(creditSummary.customer_id, newStatus);
+                      }}
+                      className={creditSummary.status === 'defaulter' ? "bg-red-600 hover:bg-red-700" : ""}
+                    >
+                      {creditSummary.status === 'defaulter' ? 'Remove Defaulter' : 'Mark as Defaulter'}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -641,9 +656,14 @@ const Credits = () => {
       <AlertDialog open={defaulterConfirmOpen} onOpenChange={setDefaulterConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-red-600">Confirm Defaulter Status</AlertDialogTitle>
+            <AlertDialogTitle className="text-red-600">
+              {pendingStatusChange?.newStatus === 'defaulter' ? 'Mark as Defaulter' : 'Remove Defaulter Status'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to mark this credit as defaulter? This action can be reversed later if needed.
+              {pendingStatusChange?.newStatus === 'defaulter'
+                ? 'Are you sure you want to mark this customer as a defaulter? This will affect their credit status across all their credits and will be visible in global search. This action can be reversed later.'
+                : 'Are you sure you want to remove the defaulter status from this customer? This will restore their normal credit status.'
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -657,7 +677,7 @@ const Credits = () => {
               onClick={confirmStatusChange}
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
-              Confirm
+              {pendingStatusChange?.newStatus === 'defaulter' ? 'Mark as Defaulter' : 'Remove Defaulter'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
