@@ -399,114 +399,6 @@ const GlobalSearch = () => {
                 </Card>
               )}
 
-              {/* Phase 5: Global Credit Behaviour Section */}
-              <Card className={`border-2 ${
-                searchResult.defaulter_insights?.risk_level === 'high' ? 'border-red-300 bg-red-50' :
-                searchResult.defaulter_insights?.risk_level === 'medium' ? 'border-yellow-300 bg-yellow-50' :
-                'border-green-300 bg-green-50'
-              }`}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      searchResult.defaulter_insights?.risk_level === 'high' ? 'bg-red-100' :
-                      searchResult.defaulter_insights?.risk_level === 'medium' ? 'bg-yellow-100' :
-                      'bg-green-100'
-                    }`}>
-                      <AlertCircle className={`h-5 w-5 ${
-                        searchResult.defaulter_insights?.risk_level === 'high' ? 'text-red-600' :
-                        searchResult.defaulter_insights?.risk_level === 'medium' ? 'text-yellow-600' :
-                        'text-green-600'
-                      }`} />
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold">Global Credit Behaviour</div>
-                      <div className="text-sm text-gray-600">
-                        {searchResult.defaulter_insights?.total_shops_marking_defaulter > 0
-                          ? `Defaulter in ${searchResult.defaulter_insights.total_shops_marking_defaulter} shop${searchResult.defaulter_insights.total_shops_marking_defaulter !== 1 ? 's' : ''}`
-                          : 'Clean credit history across all shops'
-                        }
-                      </div>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <div className="text-center p-3 bg-white rounded-lg border">
-                      <p className="text-2xl font-bold text-red-600">
-                        ₹{searchResult.defaulter_insights?.total_outstanding_all_shops?.toFixed(2) || '0.00'}
-                      </p>
-                      <p className="text-xs text-gray-600">Total Outstanding</p>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border">
-                      <p className="text-2xl font-bold text-orange-600">
-                        {searchResult.defaulter_insights?.total_overdue_credits || 0}
-                      </p>
-                      <p className="text-xs text-gray-600">Overdue Credits</p>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border">
-                      <p className="text-2xl font-bold text-blue-600">
-                        {searchResult.defaulter_insights?.days_since_last_repayment ?
-                          `${Math.floor(searchResult.defaulter_insights.days_since_last_repayment)} days` :
-                          'N/A'
-                        }
-                      </p>
-                      <p className="text-xs text-gray-600">Since Last Payment</p>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border">
-                      <p className="text-2xl font-bold text-purple-600">
-                        {searchResult.defaulter_insights?.number_of_default_events || 0}
-                      </p>
-                      <p className="text-xs text-gray-600">Default Events</p>
-                    </div>
-                  </div>
-
-                  {/* Risk Level Badge */}
-                  <div className="flex justify-center mb-4">
-                    <Badge className={`px-4 py-2 text-sm font-semibold ${
-                      searchResult.defaulter_insights?.risk_level === 'high' ? 'bg-red-100 text-red-800 border-red-300' :
-                      searchResult.defaulter_insights?.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                      'bg-green-100 text-green-800 border-green-300'
-                    }`}>
-                      {searchResult.defaulter_insights?.risk_level === 'high' ? 'High Risk' :
-                       searchResult.defaulter_insights?.risk_level === 'medium' ? 'Medium Risk' :
-                       'Low Risk'}
-                    </Badge>
-                  </div>
-
-                  {/* Per-Shop Risk Indicators */}
-                  {searchResult.shop_profiles && searchResult.shop_profiles.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-gray-900">Per-Shop Risk Assessment</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {searchResult.shop_profiles.map((shop, index) => (
-                          <div key={index} className={`p-3 rounded-lg border-2 ${
-                            shop.has_defaulter_credit ? 'border-red-300 bg-red-50' :
-                            shop.outstanding > 1000 ? 'border-yellow-300 bg-yellow-50' :
-                            'border-green-300 bg-green-50'
-                          }`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-gray-900">Shop #{shop.shop_id}</span>
-                              <Badge className={`text-xs ${
-                                shop.has_defaulter_credit ? 'bg-red-100 text-red-700' :
-                                shop.outstanding > 1000 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
-                                {shop.has_defaulter_credit ? 'Defaulter' :
-                                 shop.outstanding > 1000 ? 'High Outstanding' :
-                                 'Good Standing'}
-                              </Badge>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              Outstanding: <span className="font-semibold">₹{shop.outstanding.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               {/* Transaction History Accordion */}
               {searchResult.defaulter_transactions && searchResult.defaulter_transactions.length > 0 && (
                 <Card>
@@ -592,7 +484,8 @@ const GlobalSearch = () => {
                 </Card>
               )}
 
-              {/* Summary Statistics */}
+              {/* Summary Statistics - Commented out */}
+              {/*
               <Card className="border-green-200 bg-green-50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-green-900">
@@ -619,6 +512,7 @@ const GlobalSearch = () => {
                   </div>
                 </CardContent>
               </Card>
+              */}
             </div>
           ) : (
             <Card>
