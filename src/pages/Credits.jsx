@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft } from "lucide-react";
+import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft, Check, ChevronsUpDown, CheckCircle2 } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -25,13 +26,15 @@ const Credits = () => {
   const [selectedCreditForPartial, setSelectedCreditForPartial] = useState(null);
   const [partialPaymentDate, setPartialPaymentDate] = useState(new Date());
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerOpen, setCustomerOpen] = useState(false);
   const [defaulterConfirmOpen, setDefaulterConfirmOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [creditHistoryDialogOpen, setCreditHistoryDialogOpen] = useState(false);
   const [selectedCustomerHistory, setSelectedCustomerHistory] = useState(null);
   const [creditHistoryData, setCreditHistoryData] = useState([]);
   const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
+  const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false);
+  const [selectedCreditForMarkPaid, setSelectedCreditForMarkPaid] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,7 +73,7 @@ const Credits = () => {
     setCreditHistoryLoading(true);
     try {
       console.log("Fetching credit history for customer:", customerId, "user:", user.id);
-      
+
       const { data, error } = await supabase.rpc('get_customer_credit_history', {
         customer_id: customerId,
         user_id: user.id
@@ -140,10 +143,10 @@ const Credits = () => {
   const handleAddCredit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const creditData = {
         customer_id: parseInt(formData.get("customer_id")),
         amount: parseFloat(formData.get("amount")),
@@ -166,6 +169,7 @@ const Credits = () => {
       setIsAddDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
       queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       e.target.reset();
     } catch (error) {
       console.error("Error adding credit:", error);
@@ -208,6 +212,8 @@ const Credits = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -238,6 +244,8 @@ const Credits = () => {
       setDefaulterConfirmOpen(false);
       setPendingStatusChange(null);
       queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -251,11 +259,11 @@ const Credits = () => {
   const handlePartialPayment = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const partialAmount = parseFloat(formData.get("partial_amount"));
-      
+
       // Insert payment record
       const { error: paymentError } = await supabase
         .from("payments")
@@ -285,6 +293,7 @@ const Credits = () => {
       setIsPartialPaymentDialogOpen(false);
       setSelectedCreditForPartial(null);
       queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       e.target.reset();
     } catch (error) {
       console.error("Error recording partial payment:", error);
@@ -380,6 +389,47 @@ const Credits = () => {
     );
   }
 
+
+
+  const handleMarkAsPaid = async () => {
+    if (!selectedCreditForMarkPaid) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase.rpc('mark_credit_as_paid', {
+        p_credit_id: selectedCreditForMarkPaid.id,
+        p_user_id: user.id
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.message);
+
+      toast({
+        title: "Success",
+        description: `Credit marked as paid. Recorded payment of ${formatCurrency(data.amount_paid)}`,
+      });
+
+      setMarkPaidConfirmOpen(false);
+      setSelectedCreditForMarkPaid(null);
+
+      // Refresh data
+      if (selectedCustomerHistory) {
+        await fetchCreditHistory(selectedCustomerHistory.customer_id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+
+    } catch (error) {
+      console.error("Error marking credit as paid:", error);
+      toast({
+        title: "Error",
+        description: "Failed to mark credit as paid: " + error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -397,7 +447,7 @@ const Credits = () => {
             <p className="text-gray-600">Manage credit transactions</p>
           </div>
         </div>
-        
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -415,38 +465,50 @@ const Credits = () => {
             <form onSubmit={handleAddCredit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Customer</Label>
-                <Select name="customer_id" required value={String(selectedCustomerId)} onValueChange={val => setSelectedCustomerId(val)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    <div className="px-2 py-2 sticky top-0 bg-white z-10">
-                      <Input
-                        type="text"
-                        placeholder="Search customer..."
-                        value={customerSearch}
-                        onChange={e => setCustomerSearch(e.target.value)}
-                        className="w-full border rounded px-2 py-1"
-                        autoFocus
-                      />
-                    </div>
-                    {(Array.isArray(customers) ? customers : [])
-                      .filter(c => {
-                        if (!c) return false;
-                        const search = customerSearch.toLowerCase();
-                        if (!search) return true;
-                        const nameMatch = typeof c.name === 'string' && c.name.toLowerCase().includes(search);
-                        const phoneMatch = typeof c.phone === 'string' && c.phone.toLowerCase().includes(search);
-                        const aadharMatch = typeof c.id_proof === 'string' && c.id_proof.slice(-4).includes(search);
-                        return nameMatch || phoneMatch || aadharMatch;
-                      })
-                      .map((customer) => (
-                        <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name} {customer.id_proof ? `•Aadhar ${customer.id_proof}` : ""}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={customerOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedCustomerId
+                        ? customers.find((customer) => String(customer.id) === selectedCustomerId)?.name
+                        : "Select customer..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search customer..." />
+                      <CommandList>
+                        <CommandEmpty>No customer found.</CommandEmpty>
+                        <CommandGroup>
+                          {customers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={customer.name}
+                              onSelect={() => {
+                                setSelectedCustomerId(String(customer.id));
+                                setCustomerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedCustomerId === String(customer.id) ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {customer.name} {customer.id_proof ? `• ${customer.id_proof}` : ""}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <input type="hidden" name="customer_id" value={selectedCustomerId} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (₹)</Label>
@@ -525,12 +587,12 @@ const Credits = () => {
                         {creditSummary.credit_count} {creditSummary.credit_count === 1 ? 'Credit' : 'Credits'}
                       </Badge>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span>Phone: {creditSummary.customer_phone}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <Button
                       variant="outline"
@@ -639,9 +701,9 @@ const Credits = () => {
               <Button type="submit" className="flex-1">
                 Record Payment
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsPartialPaymentDialogOpen(false)}
                 className="flex-1"
               >
@@ -683,14 +745,45 @@ const Credits = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Mark as Paid Confirmation Dialog */}
+      <AlertDialog open={markPaidConfirmOpen} onOpenChange={setMarkPaidConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-green-600 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Confirm Payment
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to mark this credit of <span className="font-bold text-gray-900">{selectedCreditForMarkPaid && formatCurrency(selectedCreditForMarkPaid.amount)}</span> as fully paid?
+              <br /><br />
+              This will record a payment for the remaining outstanding amount and update the credit status.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setMarkPaidConfirmOpen(false);
+              setSelectedCreditForMarkPaid(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMarkAsPaid}
+              className="bg-green-600 hover:bg-green-700 focus:ring-green-600"
+            >
+              Mark as Paid
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Credit History Dialog */}
       <Dialog open={creditHistoryDialogOpen} onOpenChange={setCreditHistoryDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           {/* Sticky header: customer name + aggregated status stays fixed */}
           <div className="sticky top-0 z-20 bg-white border-b shadow-sm transition-shadow dark:bg-slate-900">
-            <DialogHeader className="p-4 relative pt-6">
-              <div className="flex items-center gap-3">
-                <DialogTitle>Credit History - {selectedCustomerHistory?.name}</DialogTitle>
+            <DialogHeader className="p-4 relative pt-6 pr-12">
+              <div className="flex items-center gap-3 max-w-[90%]">
+                <DialogTitle className="truncate">Credit History - {selectedCustomerHistory?.name}</DialogTitle>
               </div>
               <DialogDescription>
                 Complete credit transaction history for this customer
@@ -732,9 +825,26 @@ const Credits = () => {
                             <p className="text-sm text-gray-600 mt-2">{credit.description}</p>
                           )}
                         </div>
-                        <Badge className={getStatusColor(credit.status)}>
-                          {credit.status?.charAt(0).toUpperCase() + credit.status?.slice(1)}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge className={getStatusColor(credit.status)}>
+                            {credit.status?.charAt(0).toUpperCase() + credit.status?.slice(1)}
+                          </Badge>
+
+                          {credit.status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                              onClick={() => {
+                                setSelectedCreditForMarkPaid(credit);
+                                setMarkPaidConfirmOpen(true);
+                              }}
+                            >
+                              <Check className="h-3 w-3 mr-1" />
+                              Mark as Paid
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

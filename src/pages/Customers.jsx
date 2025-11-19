@@ -112,6 +112,27 @@ const Customers = () => {
       const { data: { user } } = await supabase.auth.getUser();
       const aadharNumber = formData.get("id_proof");
 
+      // Check if customer with same Aadhar already exists in this shop
+      const { data: existingShopCustomer, error: shopCheckError } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("id_proof", aadharNumber)
+        .eq("created_by", user.id)
+        .single();
+
+      if (shopCheckError && shopCheckError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw shopCheckError;
+      }
+
+      if (existingShopCustomer) {
+        toast({
+          title: "Duplicate Customer",
+          description: `A customer with Aadhar number ${aadharNumber} already exists in your shop (${existingShopCustomer.name}). Same Aadhar cannot be used for multiple customers in the same shop.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Phase 3: Lookup or create global customer
       let globalCustomerId;
 
@@ -184,6 +205,7 @@ const Customers = () => {
 
       setIsAddDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       e.target.reset();
     } catch (error) {
       console.error("Error adding customer:", error);
@@ -198,7 +220,7 @@ const Customers = () => {
   const handleEditCustomer = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
+
     const customerData = {
       name: formData.get("name"),
       phone: formData.get("phone"),
@@ -206,9 +228,43 @@ const Customers = () => {
       id_proof: formData.get("id_proof"),
     };
 
-    // Store the data and show confirmation
-    setPendingEditData(customerData);
-    setEditConfirmOpen(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const aadharNumber = formData.get("id_proof");
+
+      // Check if another customer with same Aadhar already exists in this shop (excluding current customer)
+      const { data: existingShopCustomer, error: shopCheckError } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("id_proof", aadharNumber)
+        .eq("created_by", user.id)
+        .neq("id", editingCustomer.id) // Exclude the current customer being edited
+        .single();
+
+      if (shopCheckError && shopCheckError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw shopCheckError;
+      }
+
+      if (existingShopCustomer) {
+        toast({
+          title: "Duplicate Customer",
+          description: `A customer with Aadhar number ${aadharNumber} already exists in your shop (${existingShopCustomer.name}). Same Aadhar cannot be used for multiple customers in the same shop.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Store the data and show confirmation
+      setPendingEditData(customerData);
+      setEditConfirmOpen(true);
+    } catch (error) {
+      console.error("Error validating edit:", error);
+      toast({
+        title: "Error",
+        description: "Failed to validate customer update",
+        variant: "destructive",
+      });
+    }
   };
 
   const confirmEditCustomer = async () => {
@@ -229,6 +285,7 @@ const Customers = () => {
       setEditConfirmOpen(false);
       setPendingEditData(null);
       queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
       console.error("Error updating customer:", error);
       toast({
@@ -262,6 +319,7 @@ const Customers = () => {
       setDeleteConfirmOpen(false);
       setCustomerToDelete(null);
       queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
       console.error("Error deleting customer:", error);
       toast({
@@ -353,7 +411,7 @@ const Customers = () => {
               {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="address" className="text-sm font-semibold text-gray-700">
               Address <span className="text-red-500">*</span>
@@ -370,7 +428,7 @@ const Customers = () => {
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="id_proof" className="text-sm font-semibold text-gray-700">
               Aadhaar Number <span className="text-red-500">*</span>
@@ -388,7 +446,7 @@ const Customers = () => {
             />
             {errors.idProof && <p className="text-xs text-red-500">{errors.idProof}</p>}
           </div>
-          
+
           <Button type="submit" className="w-full h-12 btn-3d bg-gradient-primary hover:shadow-primary font-semibold">
             <Sparkles className="h-4 w-4 mr-2" />
             {customer ? "Update Customer" : "Add Customer"}
@@ -465,7 +523,7 @@ const Customers = () => {
               <p className="text-gray-600 text-lg">Manage your customers and their transactions</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4 mt-4">
             <div className="flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-xl border border-green-200">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -473,7 +531,7 @@ const Customers = () => {
             </div>
           </div>
         </div>
-        
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="btn-3d bg-gradient-primary hover:shadow-primary px-6 py-3 h-auto">
@@ -524,14 +582,14 @@ const Customers = () => {
                   {searchTerm ? "No customers found" : "No customers yet"}
                 </h3>
                 <p className="text-gray-500 text-base mb-6">
-                  {searchTerm 
-                    ? "Try adjusting your search terms or check spelling." 
+                  {searchTerm
+                    ? "Try adjusting your search terms or check spelling."
                     : "Start building your customer network by adding your first customer."
                   }
                 </p>
               </div>
               {!searchTerm && (
-                <Button 
+                <Button
                   onClick={() => setIsAddDialogOpen(true)}
                   className="btn-3d bg-gradient-primary hover:shadow-primary px-8 py-3 h-auto"
                 >
@@ -546,102 +604,100 @@ const Customers = () => {
         <div className="responsive-grid">
           {filteredCustomers.map((customer) => {
             return (
-            <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
-              <CardHeader className="pb-3 sm:pb-4">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex items-start space-x-2 sm:space-x-3 flex-1 min-w-0">
-                    <div className="p-2 sm:p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl sm:rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
-                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base sm:text-lg md:text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300 truncate">
-                        {customer.name}
-                      </CardTitle>
-                      <CardDescription className="text-xs sm:text-sm text-gray-500 font-medium truncate">
-                        ID: #{customer.id}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCustomer(customer);
-                      }}
-                    >
-                      <Edit className="h-4 w-4 text-blue-600" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCustomer(customer);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-3 sm:space-y-4 flex-1">
-                {customer.phone && (
-                  <div className="flex items-center space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
-                    <div className="p-1.5 sm:p-2 bg-green-100 rounded-md sm:rounded-lg flex-shrink-0">
-                      <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{customer.phone}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-500">Phone Number</p>
-                    </div>
-                  </div>
-                )}
-                
-                {customer.address && (
-                  <div className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
-                    <div className="p-1.5 sm:p-2 bg-blue-100 rounded-md sm:rounded-lg mt-0.5 flex-shrink-0">
-                      <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2">{customer.address}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-500">Address</p>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
-                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl text-xs w-fit">
-                    <IdCard className="h-3 w-3 mr-1" />
-                    <span className="truncate">{customer.id_proof}</span>
-                  </Badge>
-                  
-                  <div className="text-[10px] sm:text-xs text-gray-400">
-                    Added {new Date(customer.created_at).toLocaleDateString('en-IN')}
-                  </div>
-                </div>
+              <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
+                <CardHeader className="pb-3 sm:pb-4">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex items-start space-x-2 sm:space-x-3 flex-1 min-w-0">
+                      <div className="p-2 sm:p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl sm:rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                        <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base sm:text-lg md:text-xl font-heading text-gray-900 group-hover:text-green-600 transition-colors duration-300 truncate">
+                          {customer.name}
+                        </CardTitle>
 
-                {/* Transaction Summary */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
-                  <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{customer.total_credit.toFixed(0)}</div>
-                    <div className="text-[10px] sm:text-xs text-blue-500">Credit</div>
+                      </div>
+                    </div>
+                    <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-blue-50 rounded-xl"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCustomer(customer);
+                        }}
+                      >
+                        <Edit className="h-4 w-4 text-blue-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-red-50 rounded-xl"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCustomer(customer);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{customer.total_payments.toFixed(0)}</div>
-                    <div className="text-[10px] sm:text-xs text-green-500">Paid</div>
+                </CardHeader>
+
+                <CardContent className="space-y-3 sm:space-y-4 flex-1">
+                  {customer.phone && (
+                    <div className="flex items-center space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
+                      <div className="p-1.5 sm:p-2 bg-green-100 rounded-md sm:rounded-lg flex-shrink-0">
+                        <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{customer.phone}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-500">Phone Number</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.address && (
+                    <div className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
+                      <div className="p-1.5 sm:p-2 bg-blue-100 rounded-md sm:rounded-lg mt-0.5 flex-shrink-0">
+                        <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2">{customer.address}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-500">Address</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
+                    <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl text-xs w-fit">
+                      <IdCard className="h-3 w-3 mr-1" />
+                      <span className="truncate">{customer.id_proof}</span>
+                    </Badge>
+
+                    <div className="text-[10px] sm:text-xs text-gray-400">
+                      Added {new Date(customer.created_at).toLocaleDateString('en-IN')}
+                    </div>
                   </div>
-                  <div className="text-center p-1.5 sm:p-2 bg-orange-50 rounded-md sm:rounded-lg">
-                    <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{customer.outstanding.toFixed(0)}</div>
-                    <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
+
+                  {/* Transaction Summary */}
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
+                    <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-md sm:rounded-lg">
+                      <div className="text-xs sm:text-sm font-semibold text-blue-600 truncate">₹{customer.total_credit.toFixed(0)}</div>
+                      <div className="text-[10px] sm:text-xs text-blue-500">Credit</div>
+                    </div>
+                    <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-md sm:rounded-lg">
+                      <div className="text-xs sm:text-sm font-semibold text-green-600 truncate">₹{customer.total_payments.toFixed(0)}</div>
+                      <div className="text-[10px] sm:text-xs text-green-500">Paid</div>
+                    </div>
+                    <div className="text-center p-1.5 sm:p-2 bg-orange-50 rounded-md sm:rounded-lg">
+                      <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{customer.outstanding.toFixed(0)}</div>
+                      <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

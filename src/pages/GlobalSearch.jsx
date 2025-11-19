@@ -82,6 +82,16 @@ const GlobalSearch = () => {
         return;
       }
 
+      // Check if customer exists but is not a defaulter
+      if (data.status === 'no_defaulter') {
+        setSearchResult(data);
+        toast({
+          title: "No Defaulter Found",
+          description: "This customer has no defaulter history.",
+        });
+        return;
+      }
+
       setSearchResult(data);
       toast({
         title: "Search Complete",
@@ -104,7 +114,7 @@ const GlobalSearch = () => {
   // Refresh the search results to get latest data
   const handleRefresh = async () => {
     if (!searchResult || !searchTerm) return;
-    
+
     setRefreshing(true);
     try {
       const { data, error } = await supabase
@@ -183,9 +193,8 @@ const GlobalSearch = () => {
                     setSearchTerm(value);
                   }}
                   maxLength={12}
-                  className={`text-lg h-12 pr-10 ${
-                    searchTerm && (isValidAadhar ? 'border-green-500' : 'border-destructive')
-                  }`}
+                  className={`text-lg h-12 pr-10 ${searchTerm && (isValidAadhar ? 'border-green-500' : 'border-destructive')
+                    }`}
                   aria-label="Aadhar number input"
                   aria-invalid={!!validationError}
                   aria-describedby={validationError ? "aadhar-error" : undefined}
@@ -210,7 +219,7 @@ const GlobalSearch = () => {
                 {searchTerm.length}/12 digits entered
               </p>
             </div>
-            <Button 
+            <Button
               type="submit"
               disabled={loading || !isValidAadhar}
               className="w-full h-11 font-semibold"
@@ -235,285 +244,182 @@ const GlobalSearch = () => {
       {hasSearched && (
         <>
           {searchResult ? (
-            <div className="space-y-6">
-              {/* Phase 4: Enhanced Global Search Results */}
-
-              {/* Global Identity */}
-              <Card className="border-2 border-blue-200 bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-3 text-blue-900">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <User className="h-5 w-5 text-blue-600" />
-                    </div>
-                    Global Customer Identity
-                  </CardTitle>
-                  <CardDescription>
-                    Unified customer profile across all shops
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-blue-700 font-medium">Aadhar Number</p>
-                      <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.aadhar_no}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-blue-700 font-medium">Name</p>
-                      <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.name || 'Not provided'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-blue-700 font-medium">Phone</p>
-                      <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.phone || 'Not provided'}</p>
-                    </div>
-                  </div>
+            searchResult.status === 'no_defaulter' ? (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-12 text-center">
+                  <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-green-900 mb-2">No Defaulter Credit Found</h3>
+                  <p className="text-green-700 max-w-md mx-auto">
+                    Good news! No defaulter credit history was found associated with Aadhar number <span className="font-mono font-bold">{searchResult.aadhar_no}</span>.
+                  </p>
                 </CardContent>
               </Card>
+            ) : (
+              <div className="space-y-6">
+                {/* Phase 4: Enhanced Global Search Results */}
 
-              {/* Shop Profiles */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5" />
-                    Shop Profiles ({searchResult.shop_profiles?.length || 0} shops)
-                  </CardTitle>
-                  <CardDescription>
-                    Customer exists in these shops
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {searchResult.shop_profiles && searchResult.shop_profiles.length > 0 ? (
-                    <div className="space-y-4">
-                      {searchResult.shop_profiles.map((shop, index) => (
-                        <div key={index} className={`p-4 rounded-lg border-2 ${shop.has_defaulter_credit ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className={`p-2 rounded-lg ${shop.has_defaulter_credit ? 'bg-red-100' : 'bg-green-100'}`}>
-                                <User className={`h-4 w-4 ${shop.has_defaulter_credit ? 'text-red-600' : 'text-green-600'}`} />
-                              </div>
-                              <div>
-                                <p className="font-semibold text-gray-900">Shop #{shop.shop_id}</p>
-                                <p className="text-sm text-gray-600">{shop.customer_name}</p>
-                              </div>
-                            </div>
-                            {shop.has_defaulter_credit && (
-                              <Badge className="bg-red-100 text-red-800 border-red-300">
-                                DEFAULTER
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-500">Total Credit</p>
-                              <p className="font-semibold text-green-600">₹{shop.total_credits.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500">Total Paid</p>
-                              <p className="font-semibold text-blue-600">₹{shop.total_payments.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500">Outstanding</p>
-                              <p className={`font-semibold ${shop.outstanding > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                                ₹{shop.outstanding.toFixed(2)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">No shop profiles found</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Defaulter Transactions - Detailed View */}
-              {searchResult.defaulter_transactions && searchResult.defaulter_transactions.length > 0 && (
-                <Card className="border-red-300 bg-red-50">
+                {/* Global Identity */}
+                <Card className="border-2 border-blue-200 bg-blue-50">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-red-900">
-                      <AlertCircle className="h-5 w-5 text-red-600" />
-                      Defaulter Transactions ({searchResult.defaulter_transactions.length})
+                    <CardTitle className="flex items-center gap-3 text-blue-900">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <User className="h-5 w-5 text-blue-600" />
+                      </div>
+                      Global Customer Identity
                     </CardTitle>
-                    <CardDescription className="text-red-700">
-                      Detailed credit and payment information for defaulter accounts
+                    <CardDescription>
+                      Unified customer profile across all shops
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-6">
-                      {searchResult.defaulter_transactions.map((transaction, index) => (
-                        <div key={index} className="border border-red-200 rounded-lg p-4 bg-white">
-                          <div className="flex items-center justify-between mb-4">
-                            <div>
-                              <p className="font-semibold text-gray-900">Credit #{transaction.credit_id}</p>
-                              <p className="text-sm text-gray-600">Shop #{transaction.shop_id} • {transaction.customer_name}</p>
-                            </div>
-                            <Badge className="bg-red-100 text-red-800">DEFAULTER</Badge>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <div>
-                              <p className="text-xs text-gray-500">Credit Amount</p>
-                              <p className="font-semibold text-lg text-red-600">₹{transaction.amount.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Total Paid</p>
-                              <p className="font-semibold text-lg text-blue-600">₹{transaction.total_paid.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Outstanding</p>
-                              <p className="font-semibold text-lg text-orange-600">₹{transaction.outstanding.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Issued Date</p>
-                              <p className="font-semibold text-sm text-gray-900">
-                                {new Date(transaction.issued_date).toLocaleDateString('en-IN')}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Payment History */}
-                          {transaction.payments && transaction.payments.length > 0 ? (
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Payment History</p>
-                              <div className="space-y-2">
-                                {transaction.payments.map((payment, pIndex) => (
-                                  <div key={pIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                                    <div>
-                                      <p className="font-medium text-green-600">₹{payment.amount.toFixed(2)}</p>
-                                      <p className="text-xs text-gray-500">
-                                        {new Date(payment.payment_date).toLocaleDateString('en-IN')} • {payment.payment_method}
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs">Payment #{payment.payment_id}</Badge>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-gray-500 italic">No payments recorded</p>
-                          )}
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-blue-700 font-medium">Aadhar Number</p>
+                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.aadhar_no}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-blue-700 font-medium">Name</p>
+                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.name || 'Not provided'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-blue-700 font-medium">Phone</p>
+                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.phone || 'Not provided'}</p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-              )}
 
-              {/* Transaction History Accordion */}
-              {searchResult.defaulter_transactions && searchResult.defaulter_transactions.length > 0 && (
+                {/* Shop Profiles */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <AlertCircle className="h-5 w-5" />
-                      Transaction History ({searchResult.defaulter_transactions.length} defaulter credits)
+                      Shop Profiles ({searchResult.shop_profiles?.length || 0} shops)
                     </CardTitle>
                     <CardDescription>
-                      Complete transaction timeline across all shops
+                      Customer exists in these shops
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {searchResult.defaulter_transactions.map((transaction, index) => (
-                        <details key={index} className="border border-gray-200 rounded-lg">
-                          <summary className="p-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-red-100 rounded-lg">
-                                <AlertCircle className="h-4 w-4 text-red-600" />
+                    {searchResult.shop_profiles && searchResult.shop_profiles.length > 0 ? (
+                      <div className="space-y-4">
+                        {searchResult.shop_profiles.map((shop, index) => (
+                          <div key={index} className={`p-4 rounded-lg border-2 ${shop.has_defaulter_credit ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className={`p-2 rounded-lg ${shop.has_defaulter_credit ? 'bg-red-100' : 'bg-green-100'}`}>
+                                  <User className={`h-4 w-4 ${shop.has_defaulter_credit ? 'text-red-600' : 'text-green-600'}`} />
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-gray-900">{shop.shop_name}</p>
+                                  <p className="text-sm text-gray-600">{shop.customer_name}</p>
+                                </div>
                               </div>
+                              {shop.has_defaulter_credit && (
+                                <Badge className="bg-red-100 text-red-800 border-red-300">
+                                  DEFAULTER
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <p className="text-gray-500">Total Credit</p>
+                                <p className="font-semibold text-green-600">₹{shop.total_credits.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Total Paid</p>
+                                <p className="font-semibold text-blue-600">₹{shop.total_payments.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Outstanding</p>
+                                <p className={`font-semibold ${shop.outstanding > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                                  ₹{shop.outstanding.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">No shop profiles found</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Defaulter Transactions - Detailed View */}
+                {searchResult.defaulter_transactions && searchResult.defaulter_transactions.length > 0 && (
+                  <Card className="border-red-300 bg-red-50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-red-900">
+                        <AlertCircle className="h-5 w-5 text-red-600" />
+                        Defaulter Transactions ({searchResult.defaulter_transactions.length})
+                      </CardTitle>
+                      <CardDescription className="text-red-700">
+                        Detailed credit and payment information for defaulter accounts
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        {searchResult.defaulter_transactions.map((transaction, index) => (
+                          <div key={index} className="border border-red-200 rounded-lg p-4 bg-white">
+                            <div className="flex items-center justify-between mb-4">
                               <div>
                                 <p className="font-semibold text-gray-900">Credit #{transaction.credit_id}</p>
-                                <p className="text-sm text-gray-600">Shop #{transaction.shop_id} • {transaction.customer_name}</p>
+                                <p className="text-sm text-gray-600">{transaction.shop_name} • {transaction.customer_name}</p>
                               </div>
+                              <Badge className="bg-red-100 text-red-800">DEFAULTER</Badge>
                             </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-red-600">₹{transaction.outstanding.toFixed(2)} due</p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(transaction.issued_date).toLocaleDateString('en-IN')}
-                              </p>
-                            </div>
-                          </summary>
-                          <div className="px-4 pb-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t">
+
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                               <div>
                                 <p className="text-xs text-gray-500">Credit Amount</p>
-                                <p className="font-semibold text-lg">₹{transaction.amount.toFixed(2)}</p>
+                                <p className="font-semibold text-lg text-red-600">₹{transaction.amount.toFixed(2)}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">Total Paid</p>
-                                <p className="font-semibold text-lg text-green-600">₹{transaction.total_paid.toFixed(2)}</p>
+                                <p className="font-semibold text-lg text-blue-600">₹{transaction.total_paid.toFixed(2)}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">Outstanding</p>
-                                <p className="font-semibold text-lg text-red-600">₹{transaction.outstanding.toFixed(2)}</p>
+                                <p className="font-semibold text-lg text-orange-600">₹{transaction.outstanding.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Issued Date</p>
+                                <p className="font-semibold text-sm text-gray-900">
+                                  {new Date(transaction.issued_date).toLocaleDateString('en-IN')}
+                                </p>
                               </div>
                             </div>
 
+                            {/* Payment History */}
                             {transaction.payments && transaction.payments.length > 0 ? (
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-3">Payment Timeline</p>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Payment History</p>
                                 <div className="space-y-2">
-                                  {transaction.payments
-                                    .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
-                                    .map((payment, pIndex) => (
-                                    <div key={pIndex} className="flex items-center justify-between p-3 bg-green-50 rounded border border-green-200">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                        <div>
-                                          <p className="font-medium text-green-800">₹{payment.amount.toFixed(2)}</p>
-                                          <p className="text-xs text-green-600">{payment.payment_method}</p>
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-sm font-medium text-gray-900">
-                                          {new Date(payment.payment_date).toLocaleDateString('en-IN')}
+                                  {transaction.payments.map((payment, pIndex) => (
+                                    <div key={pIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                                      <div>
+                                        <p className="font-medium text-green-600">₹{payment.amount.toFixed(2)}</p>
+                                        <p className="text-xs text-gray-500">
+                                          {new Date(payment.payment_date).toLocaleDateString('en-IN')} • {payment.payment_method}
                                         </p>
-                                        <p className="text-xs text-gray-500">Payment #{payment.payment_id}</p>
                                       </div>
+                                      <Badge variant="outline" className="text-xs">Payment #{payment.payment_id}</Badge>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-500 italic">No payments recorded for this credit</p>
+                              <p className="text-sm text-gray-500 italic">No payments recorded</p>
                             )}
                           </div>
-                        </details>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Summary Statistics - Commented out */}
-              {/*
-              <Card className="border-green-200 bg-green-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-green-900">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    Search Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">{searchResult.shop_profiles?.length || 0}</p>
-                      <p className="text-sm text-green-700">Total Shops</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-orange-600">
-                        {searchResult.shop_profiles?.filter(s => s.has_defaulter_credit).length || 0}
-                      </p>
-                      <p className="text-sm text-orange-700">Defaulter Shops</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">{searchResult.defaulter_transactions?.length || 0}</p>
-                      <p className="text-sm text-blue-700">Defaulter Credits</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              */}
-            </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )
           ) : (
             <Card>
               <CardContent className="p-12 text-center">
@@ -527,7 +433,7 @@ const GlobalSearch = () => {
           )}
         </>
       )}
-    </div>
+    </div >
   );
 };
 
