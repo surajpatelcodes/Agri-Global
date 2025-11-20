@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Users, CreditCard, DollarSign, TrendingUp, Plus, Eye, FileText, Calendar, Sparkles, X, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import AnimatedCard from "@/components/AnimatedCard";
 import { SkeletonGrid } from "@/components/SkeletonCard";
 import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
@@ -31,7 +31,7 @@ const Dashboard = memo(() => {
     return data?.[0] || null;
   };
 
-  const { data: dashboardData, isLoading, error } = useQuery({
+  const { data: dashboardData, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
     // Immediately stale - ensures invalidations trigger refetches
@@ -42,6 +42,50 @@ const Dashboard = memo(() => {
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
+
+  // Subscribe to real-time changes in all relevant tables
+  useEffect(() => {
+    let realtimeSubscription;
+
+    try {
+      console.log("Setting up dashboard real-time subscriptions...");
+      realtimeSubscription = supabase
+        .channel('dashboard-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'credits',
+        }, (payload) => {
+          console.log("Real-time update detected in credits:", payload);
+          refetch();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'customers',
+        }, (payload) => {
+          console.log("Real-time update detected in customers:", payload);
+          refetch();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'payments',
+        }, (payload) => {
+          console.log("Real-time update detected in payments:", payload);
+          refetch();
+        })
+        .subscribe((status) => {
+          console.log("Dashboard subscription status:", status);
+        });
+    } catch (err) {
+      console.error("Error setting up dashboard subscription:", err);
+    }
+
+    return () => {
+      if (realtimeSubscription) supabase.removeChannel(realtimeSubscription);
+    };
+  }, [refetch]);
 
   // Extract data from the query response
   const stats = {
@@ -195,9 +239,21 @@ const Dashboard = memo(() => {
                 <h1 className="text-3xl font-heading font-bold mb-2 flex items-center gap-3">
                   <Sparkles className="h-8 w-8 text-yellow-300" aria-hidden="true" />
                   <span>{getGreeting()}, {userProfile?.full_name || 'Welcome'}!</span>
+                  {isFetching && !isLoading && (
+                    <TrendingUp
+                      className="h-5 w-5 text-yellow-300 animate-spin"
+                      aria-label="Updating dashboard data"
+                      title="Refreshing data..."
+                    />
+                  )}
                 </h1>
                 <p className="text-green-100 text-lg">
                   {userProfile?.shop_name && `Managing ${userProfile.shop_name}`} • Personal Dashboard
+                  {isFetching && !isLoading && (
+                    <span className="ml-2 text-xs text-yellow-200 animate-pulse">
+                      • Updating...
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="text-right">
@@ -358,6 +414,9 @@ const Dashboard = memo(() => {
               <AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />
               Defaulters
             </DialogTitle>
+            <DialogDescription id="defaulters-dialog-description" className="sr-only">
+              List of customers who have defaulted on their payments
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             {defaulters.length > 0 ? (
