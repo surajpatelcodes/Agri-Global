@@ -268,6 +268,7 @@ const Auth = () => {
                         name="password"
                         type={showLoginPassword ? "text" : "password"}
                         placeholder="Enter your password"
+                        autoComplete="current-password"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
                         required
                       />
@@ -357,6 +358,7 @@ const Auth = () => {
                         name="password"
                         type={showSignupPassword ? "text" : "password"}
                         placeholder="Create a password"
+                        autoComplete="new-password"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
                         required
                       />
