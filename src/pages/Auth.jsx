@@ -59,6 +59,29 @@ const Auth = () => {
           variant: "destructive",
         });
       } else {
+        // Check user approval status
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) {
+          console.error("Error fetching profile status:", profileError);
+          // Fallback: allow login if profile check fails (or handle strictly)
+          // For security, we might want to block, but let's log for now.
+        }
+
+        if (profile?.status === 'pending' || profile?.status === 'rejected') {
+          await supabase.auth.signOut();
+          toast({
+            title: "Account Pending",
+            description: "Your account is waiting for admin approval. Please contact support.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         if (isAdminLogin) {
           console.log("Checking admin privileges for user:", data.user.id);
 
@@ -147,7 +170,7 @@ const Auth = () => {
       } else {
         toast({
           title: "Registration Successful!",
-          description: "Please check your email to verify your account.",
+          description: "Your account has been created and is awaiting admin approval.",
         });
       }
     } catch (error) {

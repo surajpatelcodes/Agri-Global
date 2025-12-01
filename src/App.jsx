@@ -15,6 +15,8 @@ const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import AdminRoute from "./components/AdminRoute";
 
 const App = () => {
@@ -37,7 +39,11 @@ const App = () => {
               </div>
             }>
               <Routes>
-                <Route path="/" element={<Index />} />
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <Index />
+                  </ProtectedRoute>
+                } />
                 <Route path="/auth" element={<Auth />} />
 
                 {/* Admin Routes */}
