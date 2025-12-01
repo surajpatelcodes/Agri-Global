@@ -13,6 +13,7 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -24,7 +25,7 @@ const Auth = () => {
         navigate('/');
       }
     };
-    
+
     checkSession();
 
     // Listen for auth changes
@@ -40,7 +41,7 @@ const Auth = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     const formData = new FormData(e.target);
     const email = formData.get("email");
     const password = formData.get("password");
@@ -48,11 +49,11 @@ const Auth = () => {
     try {
       // Clear any existing session first to prevent credential caching issues
       await supabase.auth.signOut();
-      
+
       // Small delay to ensure session is fully cleared
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const { error } = await supabase.auth.signInWithPassword({
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -64,14 +65,71 @@ const Auth = () => {
           variant: "destructive",
         });
       } else {
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully logged in.",
-        });
-        // Form will be cleared by redirect
-        e.target.reset();
+        // Check user approval status
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) {
+          console.error("Error fetching profile status:", profileError);
+          // Fallback: allow login if profile check fails (or handle strictly)
+          // For security, we might want to block, but let's log for now.
+        }
+
+        if (profile?.status === 'pending' || profile?.status === 'rejected') {
+          await supabase.auth.signOut();
+          toast({
+            title: "Account Pending",
+            description: "Your account is waiting for admin approval. Please contact support.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (isAdminLogin) {
+          console.log("Checking admin privileges for user:", data.user.id);
+
+          // Use the security definer function to check role
+          const { data: hasAdminRole, error: roleError } = await supabase
+            .rpc('has_role', {
+              _user_id: data.user.id,
+              _role: 'admin'
+            });
+
+          if (roleError) {
+            console.error("Error checking user role:", roleError);
+          }
+
+          console.log("Admin check result:", hasAdminRole);
+
+          if (hasAdminRole === true) {
+            toast({
+              title: "Welcome Admin",
+              description: "Successfully logged in to admin panel.",
+            });
+            navigate('/admin');
+          } else {
+            console.warn("User does not have admin role.");
+            // Not an admin, sign out and show error
+            await supabase.auth.signOut();
+            toast({
+              title: "Access Denied",
+              description: "You do not have admin privileges.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Welcome back!",
+            description: "You have successfully logged in.",
+          });
+          navigate('/');
+        }
       }
     } catch (error) {
+      console.error("Login error:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred.",
@@ -85,7 +143,7 @@ const Auth = () => {
   const handleSignUp = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     const formData = new FormData(e.target);
     const email = formData.get("email");
     const password = formData.get("password");
@@ -95,7 +153,7 @@ const Auth = () => {
 
     try {
       const redirectUrl = `${window.location.origin}/`;
-      
+
       const { error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -118,7 +176,7 @@ const Auth = () => {
       } else {
         toast({
           title: "Registration Successful!",
-          description: "Please check your email to verify your account.",
+          description: "Your account has been created and is awaiting admin approval.",
         });
       }
     } catch (error) {
@@ -143,7 +201,7 @@ const Auth = () => {
         <div className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-green-300 rounded-full opacity-40 float delay-500"></div>
       </div>
 
-  <div className="w-full max-w-xs sm:max-w-sm md:max-w-md relative z-10">
+      <div className="w-full max-w-xs sm:max-w-sm md:max-w-md relative z-10">
         {/* Header Section */}
         <div className="text-center mb-4 sm:mb-6 md:mb-8 animate-fade-in">
           <div className="flex justify-center mb-3 sm:mb-4 md:mb-6">
@@ -179,7 +237,7 @@ const Auth = () => {
           <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
             <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">Welcome</CardTitle>
             <CardDescription className="text-xs sm:text-sm md:text-base">
-              Sign in to your account or create a new one to get started.
+              {isAdminLogin ? "Sign in to Admin Portal" : "Sign in to your account or create a new one"}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -188,7 +246,7 @@ const Auth = () => {
                 <TabsTrigger value="login" className="font-medium text-xs sm:text-sm">Sign In</TabsTrigger>
                 <TabsTrigger value="signup" className="font-medium text-xs sm:text-sm">Sign Up</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="login" className="mt-4 sm:mt-5 md:mt-6">
                 <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4 md:space-y-5">
                   <div className="space-y-1.5 sm:space-y-2">
@@ -227,13 +285,24 @@ const Auth = () => {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm" disabled={isLoading}>
+
+                  <Button type="submit" className={`w-full h-9 sm:h-10 md:h-11 btn-3d ${isAdminLogin ? 'bg-gray-800 hover:bg-gray-900' : 'bg-gradient-primary hover:shadow-primary'} font-medium text-sm transition-all duration-300`} disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
-                    Sign In
+                    {isAdminLogin ? "Sign In as Admin" : "Sign In"}
                   </Button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAdminLogin(!isAdminLogin)}
+                      className="text-xs text-gray-500 hover:text-gray-800 transition-colors underline-offset-4 hover:underline"
+                    >
+                      {isAdminLogin ? "Back to User Login" : "Login as Admin"}
+                    </button>
+                  </div>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup" className="mt-4 sm:mt-5 md:mt-6">
                 <form onSubmit={handleSignUp} className="space-y-3 sm:space-y-4">
                   <div className="grid grid-cols-1 gap-3 sm:gap-4">
@@ -314,7 +383,7 @@ const Auth = () => {
             </Tabs>
           </CardContent>
         </Card>
-        
+
         {/* Footer */}
         <div className="text-center mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">
           <p>Connecting agricultural businesses across networks</p>
