@@ -70,7 +70,7 @@ const Auth = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    isLoggingInRef.current = true; // Block auth listener interference
+    isLoggingInRef.current = true;
 
     const formData = new FormData(e.target);
     const email = formData.get("email")?.toString().trim();
@@ -88,17 +88,35 @@ const Auth = () => {
     }
 
     try {
-      // Step 1: Clear any existing session completely
-      await supabase.auth.signOut({ scope: 'local' });
+      // Step 1: Aggressively clear ALL Supabase auth data from localStorage
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
       
-      // Clear any cached session data from localStorage manually as backup
-      const storageKey = `sb-xkazdyvmexcofbrgzmua-auth-token`;
-      localStorage.removeItem(storageKey);
-      
-      // Step 2: Wait for session to be fully cleared
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Also clear sessionStorage
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+          sessionStorage.removeItem(key);
+        }
+      }
 
-      // Step 3: Attempt fresh login with the provided credentials
+      // Step 2: Try to sign out any existing session (ignore errors)
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (signOutError) {
+        // Ignore - we already cleared localStorage
+      }
+
+      // Step 3: Small delay to ensure cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Step 4: Fresh login with provided credentials
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
@@ -124,14 +142,14 @@ const Auth = () => {
         return;
       }
 
-      // Step 4: Verify we got the correct user by checking email matches
+      // Step 5: Verify correct user was authenticated
       if (data.user.email?.toLowerCase() !== email.toLowerCase()) {
-        console.error('Session mismatch detected! Expected:', email, 'Got:', data.user.email);
+        console.error('Session mismatch! Expected:', email, 'Got:', data.user.email);
         await supabase.auth.signOut({ scope: 'local' });
         isLoggingInRef.current = false;
         toast({
           title: "Session Error",
-          description: "Please clear your browser cache and try again.",
+          description: "Authentication mismatch. Please refresh and try again.",
           variant: "destructive",
         });
         return;
