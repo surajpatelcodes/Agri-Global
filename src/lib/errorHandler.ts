@@ -48,6 +48,24 @@ export function setupGlobalErrorHandlers() {
 
   // Handle global errors
   window.addEventListener('error', (event) => {
+    // Check for chunk load errors (dynamically imported module)
+    if (event.message && (
+      event.message.includes('dynamically imported module') ||
+      event.message.includes('Importing a module script failed')
+    )) {
+      console.log('Chunk load error detected, reloading page...');
+      // Prevent infinite reload loops
+      const storageKey = 'chunk_load_error_reload';
+      const lastReload = sessionStorage.getItem(storageKey);
+      const now = Date.now();
+
+      if (!lastReload || now - parseInt(lastReload) > 10000) {
+        sessionStorage.setItem(storageKey, now.toString());
+        window.location.reload();
+        return;
+      }
+    }
+
     logger.error('Global Error', {
       message: event.message,
       filename: event.filename,
