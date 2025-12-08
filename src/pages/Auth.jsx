@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,129 +14,207 @@ const Auth = () => {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  // Track if we're in the middle of a login attempt to prevent auth listener interference
+  const isLoggingInRef = useRef(false);
 
-  // Check for existing session and redirect if user is already authenticated
+  // Check for existing session on mount only (not during login)
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        navigate('/');
+    let isMounted = true;
+    
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (isMounted && session?.user && !isLoggingInRef.current) {
+          // Verify the session is still valid by checking the user
+          const { data: { user }, error } = await supabase.auth.getUser();
+          
+          if (user && !error) {
+            navigate('/', { replace: true });
+          }
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
       }
     };
 
-    checkSession();
+    checkInitialSession();
 
-    // Listen for auth changes
+    // Listen for auth changes, but only handle them if we're NOT actively logging in
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore auth changes during login - we handle navigation manually in handleLogin
+      if (isLoggingInRef.current) {
+        return;
+      }
+      
+      // Only auto-redirect on SIGNED_IN if not during manual login flow
       if (event === 'SIGNED_IN' && session?.user) {
-        navigate('/');
+        navigate('/', { replace: true });
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    isLoggingInRef.current = true; // Block auth listener interference
 
     const formData = new FormData(e.target);
-    const email = formData.get("email");
-    const password = formData.get("password");
+    const email = formData.get("email")?.toString().trim();
+    const password = formData.get("password")?.toString();
+
+    if (!email || !password) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter both email and password.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      isLoggingInRef.current = false;
+      return;
+    }
 
     try {
-      // Clear any existing session first to prevent credential caching issues
-      await supabase.auth.signOut();
+      // Step 1: Clear any existing session completely
+      await supabase.auth.signOut({ scope: 'local' });
+      
+      // Clear any cached session data from localStorage manually as backup
+      const storageKey = `sb-xkazdyvmexcofbrgzmua-auth-token`;
+      localStorage.removeItem(storageKey);
+      
+      // Step 2: Wait for session to be fully cleared
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Small delay to ensure session is fully cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      // Step 3: Attempt fresh login with the provided credentials
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email,
+        password: password,
       });
 
       if (error) {
+        isLoggingInRef.current = false;
         toast({
           title: "Login Failed",
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        // Check user approval status
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('status')
-          .eq('id', data.user.id)
-          .single();
+        return;
+      }
 
-        if (profileError) {
-          console.error("Error fetching profile status:", profileError);
-          // Fallback: allow login if profile check fails (or handle strictly)
-          // For security, we might want to block, but let's log for now.
+      if (!data?.user) {
+        isLoggingInRef.current = false;
+        toast({
+          title: "Login Failed",
+          description: "Unable to authenticate. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 4: Verify we got the correct user by checking email matches
+      if (data.user.email?.toLowerCase() !== email.toLowerCase()) {
+        console.error('Session mismatch detected! Expected:', email, 'Got:', data.user.email);
+        await supabase.auth.signOut({ scope: 'local' });
+        isLoggingInRef.current = false;
+        toast({
+          title: "Session Error",
+          description: "Please clear your browser cache and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 5: Check user approval status
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('status')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error fetching profile status:", profileError);
+      }
+
+      if (profile?.status === 'pending' || profile?.status === 'rejected') {
+        await supabase.auth.signOut({ scope: 'local' });
+        isLoggingInRef.current = false;
+        toast({
+          title: "Account Pending",
+          description: "Your account is waiting for admin approval. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 6: Handle admin login check
+      if (isAdminLogin) {
+        console.log("Checking admin privileges for user:", data.user.id);
+
+        const { data: hasAdminRole, error: roleError } = await supabase
+          .rpc('has_role', {
+            _user_id: data.user.id,
+            _role: 'admin'
+          });
+
+        if (roleError) {
+          console.error("Error checking user role:", roleError);
         }
 
-        if (profile?.status === 'pending' || profile?.status === 'rejected') {
-          await supabase.auth.signOut();
+        console.log("Admin check result:", hasAdminRole);
+
+        if (hasAdminRole === true) {
+          isLoggingInRef.current = false;
           toast({
-            title: "Account Pending",
-            description: "Your account is waiting for admin approval. Please contact support.",
+            title: "Welcome Admin",
+            description: "Successfully logged in to admin panel.",
+          });
+          navigate('/admin', { replace: true });
+        } else {
+          console.warn("User does not have admin role.");
+          await supabase.auth.signOut({ scope: 'local' });
+          isLoggingInRef.current = false;
+          toast({
+            title: "Access Denied",
+            description: "You do not have admin privileges.",
             variant: "destructive",
           });
-          return;
         }
-
-        if (isAdminLogin) {
-          console.log("Checking admin privileges for user:", data.user.id);
-
-          // Use the security definer function to check role
-          const { data: hasAdminRole, error: roleError } = await supabase
-            .rpc('has_role', {
-              _user_id: data.user.id,
-              _role: 'admin'
-            });
-
-          if (roleError) {
-            console.error("Error checking user role:", roleError);
-          }
-
-          console.log("Admin check result:", hasAdminRole);
-
-          if (hasAdminRole === true) {
-            toast({
-              title: "Welcome Admin",
-              description: "Successfully logged in to admin panel.",
-            });
-            navigate('/admin');
-          } else {
-            console.warn("User does not have admin role.");
-            // Not an admin, sign out and show error
-            await supabase.auth.signOut();
-            toast({
-              title: "Access Denied",
-              description: "You do not have admin privileges.",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Welcome back!",
-            description: "You have successfully logged in.",
-          });
-          navigate('/');
-        }
+      } else {
+        // Regular user login success
+        isLoggingInRef.current = false;
+        toast({
+          title: "Welcome back!",
+          description: `Successfully logged in as ${data.user.email}`,
+        });
+        navigate('/', { replace: true });
       }
     } catch (error) {
       console.error("Login error:", error);
+      isLoggingInRef.current = false;
       toast({
         title: "Error",
-        description: "An unexpected error occurred.",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+      // Ensure ref is reset even if something goes wrong
+      setTimeout(() => {
+        isLoggingInRef.current = false;
+      }, 500);
     }
   };
 
@@ -145,11 +223,21 @@ const Auth = () => {
     setIsLoading(true);
 
     const formData = new FormData(e.target);
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const fullName = formData.get("fullName");
-    const shopName = formData.get("shopName");
-    const phone = formData.get("phone");
+    const email = formData.get("email")?.toString().trim();
+    const password = formData.get("password")?.toString();
+    const fullName = formData.get("fullName")?.toString().trim();
+    const shopName = formData.get("shopName")?.toString().trim();
+    const phone = formData.get("phone")?.toString().trim();
+
+    if (!email || !password || !fullName || !shopName || !phone) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const redirectUrl = `${window.location.origin}/`;
@@ -189,6 +277,15 @@ const Auth = () => {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking initial session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-3 sm:px-4 md:px-4 py-4 relative overflow-hidden">
@@ -256,6 +353,7 @@ const Auth = () => {
                       name="email"
                       type="email"
                       placeholder="Enter your email"
+                      autoComplete="email"
                       className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
@@ -313,6 +411,7 @@ const Auth = () => {
                         id="signup-name"
                         name="fullName"
                         placeholder="Enter your full name"
+                        autoComplete="name"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
@@ -323,6 +422,7 @@ const Auth = () => {
                         id="signup-shop"
                         name="shopName"
                         placeholder="Enter your shop name"
+                        autoComplete="organization"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
@@ -335,6 +435,7 @@ const Auth = () => {
                       name="phone"
                       type="tel"
                       placeholder="Enter your phone number"
+                      autoComplete="tel"
                       className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
@@ -346,6 +447,7 @@ const Auth = () => {
                       name="email"
                       type="email"
                       placeholder="Enter your email"
+                      autoComplete="email"
                       className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
