@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ const Auth = () => {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const isLoggingInRef = useRef(false);
 
   // Check for existing session and redirect if user is already authenticated
   useEffect(() => {
