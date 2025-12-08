@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ const Auth = () => {
   const [isAdminLogin, setIsAdminLogin] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Check for existing session and redirect if user is already authenticated
   useEffect(() => {
@@ -48,6 +50,7 @@ const Auth = () => {
 
     try {
       // Clear any existing session first to prevent credential caching issues
+      queryClient.clear();
       await supabase.auth.signOut();
 
       // Small delay to ensure session is fully cleared
