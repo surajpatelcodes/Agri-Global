@@ -75,10 +75,9 @@ const Auth = () => {
 
     try {
       // Clear any existing session first to prevent credential caching issues
-      await supabase.auth.signOut();
-
-      // Small delay to ensure session is fully cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
+      queryClient.clear();
+      // Clear any existing session first to prevent credential caching issues
+      queryClient.clear();
 
       // Step 4: Fresh login with provided credentials
       const { data, error } = await supabase.auth.signInWithPassword({
