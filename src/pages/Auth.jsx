@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,22 +17,19 @@ const Auth = () => {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
-  
-  // Track if we're in the middle of a login attempt to prevent auth listener interference
-  const isLoggingInRef = useRef(false);
 
-  // Check for existing session on mount only (not during login)
+  // Check for existing session and redirect if user is already authenticated
   useEffect(() => {
     let isMounted = true;
-    
+
     const checkInitialSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (isMounted && session?.user && !isLoggingInRef.current) {
           // Verify the session is still valid by checking the user
           const { data: { user }, error } = await supabase.auth.getUser();
-          
+
           if (user && !error) {
             navigate('/', { replace: true });
           }
@@ -54,7 +51,7 @@ const Auth = () => {
       if (isLoggingInRef.current) {
         return;
       }
-      
+
       // Only auto-redirect on SIGNED_IN if not during manual login flow
       if (event === 'SIGNED_IN' && session?.user) {
         navigate('/', { replace: true });
@@ -73,47 +70,14 @@ const Auth = () => {
     isLoggingInRef.current = true;
 
     const formData = new FormData(e.target);
-    const email = formData.get("email")?.toString().trim();
-    const password = formData.get("password")?.toString();
-
-    if (!email || !password) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter both email and password.",
-        variant: "destructive",
-      });
-      setIsLoading(false);
-      isLoggingInRef.current = false;
-      return;
-    }
+    const email = formData.get("email");
+    const password = formData.get("password");
 
     try {
-      // Step 1: Aggressively clear ALL Supabase auth data from localStorage
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-      
-      // Also clear sessionStorage
-      for (let i = sessionStorage.length - 1; i >= 0; i--) {
-        const key = sessionStorage.key(i);
-        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-          sessionStorage.removeItem(key);
-        }
-      }
+      // Clear any existing session first to prevent credential caching issues
+      await supabase.auth.signOut();
 
-      // Step 2: Try to sign out any existing session (ignore errors)
-      try {
-        await supabase.auth.signOut({ scope: 'local' });
-      } catch (signOutError) {
-        // Ignore - we already cleared localStorage
-      }
-
-      // Step 3: Small delay to ensure cleanup
+      // Small delay to ensure session is fully cleared
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Step 4: Fresh login with provided credentials

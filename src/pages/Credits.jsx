@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,14 @@ const Credits = () => {
   const [selectedCreditForMarkPaid, setSelectedCreditForMarkPaid] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (searchParams.get("openIssue") === "true") {
+      setIsAddDialogOpen(true);
+    }
+  }, [searchParams]);
 
   // Fetch credits summary using optimized SQL function
   const fetchCreditsSummary = async () => {
