@@ -192,7 +192,7 @@ const Dashboard = memo(() => {
       title: "Issue Credit",
       description: "Create new credit",
       icon: CreditCard,
-      action: () => navigate('/credits'),
+      action: () => navigate('/?openIssue=true#credits'),
       gradient: "from-green-500 to-green-600",
     },
     {
