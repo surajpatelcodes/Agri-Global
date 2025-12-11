@@ -48,23 +48,7 @@ const Auth = () => {
 
     checkInitialSession();
 
-    // Listen for auth changes, but only handle them if we're NOT actively logging in
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // Ignore auth changes during login - we handle navigation manually in handleLogin
-      if (isLoggingInRef.current) {
-        return;
-      }
 
-      // Only auto-redirect on SIGNED_IN if not during manual login flow
-      if (event === 'SIGNED_IN' && session?.user) {
-        navigate('/', { replace: true });
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, [navigate]);
 
   const handleLogin = async (e) => {
