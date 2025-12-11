@@ -18,6 +18,7 @@ const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import AdminRoute from "./components/AdminRoute";
+import { AuthCleanup } from "./components/AuthCleanup";
 
 const App = () => {
   // Setup global error handlers and report web vitals on mount
@@ -33,6 +34,7 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <AuthCleanup />
             <Suspense fallback={
               <div className="min-h-screen flex items-center justify-center bg-background">
                 <LoadingSpinner text="Loading application..." />

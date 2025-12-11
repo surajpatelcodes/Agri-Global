@@ -102,6 +102,34 @@ const UserManagement = () => {
 
     const updateUserStatus = async (userId, newStatus) => {
         try {
+            // If approving, first confirm the user's email via edge function
+            if (newStatus === 'approved') {
+                const { data, error: confirmError } = await supabase.functions.invoke('confirm-user-email', {
+                    body: { userId }
+                });
+
+                if (confirmError) {
+                    console.error('Error confirming email:', confirmError);
+                    toast({
+                        title: "Error",
+                        description: "Failed to confirm user email. Please try again.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                if (data?.error) {
+                    console.error('Edge function error:', data.error);
+                    toast({
+                        title: "Error",
+                        description: data.error || "Failed to confirm user email.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+            }
+
+            // Update the profile status
             const { error } = await supabase
                 .from('profiles')
                 .update({ status: newStatus })

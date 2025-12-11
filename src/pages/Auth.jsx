@@ -1,48 +1,131 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff } from "lucide-react";
+import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff, KeyRound } from "lucide-react";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [showForgotPasswordDialog, setShowForgotPasswordDialog] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [isPasswordResetMode, setIsPasswordResetMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const isLoggingInRef = useRef(false);
 
-  // Check for existing session and redirect if user is already authenticated
+  // Check for password recovery mode from URL hash or query params - MUST run first
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        navigate('/');
-      }
-    };
+    // Check hash params (Supabase uses #access_token=...&type=recovery format)
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const hashType = hashParams.get('type');
+    
+    // Also check query params in case redirect format differs
+    const queryParams = new URLSearchParams(location.search);
+    const queryType = queryParams.get('type');
+    
+    // Check for error_code which indicates password recovery flow
+    const errorCode = hashParams.get('error_code') || queryParams.get('error_code');
+    
+    console.log('Auth URL check:', { 
+      hash: location.hash, 
+      search: location.search,
+      hashType, 
+      queryType,
+      errorCode 
+    });
+    
+    if (hashType === 'recovery' || queryType === 'recovery') {
+      console.log('Password recovery mode detected from URL');
+      setIsPasswordResetMode(true);
+      setIsCheckingSession(false);
+    }
+  }, [location]);
 
-    checkSession();
-
-    // Listen for auth changes
+  // Listen for auth state changes (for password recovery)
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        navigate('/');
+      console.log('Auth state change:', event, session?.user?.email);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event received');
+        setIsPasswordResetMode(true);
+        setIsCheckingSession(false);
+      }
+      
+      // Also check if we have a session with recovery type in URL
+      if (session && (location.hash.includes('type=recovery') || location.search.includes('type=recovery'))) {
+        console.log('Session with recovery type in URL');
+        setIsPasswordResetMode(true);
+        setIsCheckingSession(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [location]);
+
+  // Check for existing session and redirect if user is already authenticated
+  useEffect(() => {
+    // Don't redirect during password reset
+    if (isPasswordResetMode) {
+      setIsCheckingSession(false);
+      return;
+    }
+    
+    // Check if URL indicates recovery before doing session check
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const queryParams = new URLSearchParams(location.search);
+    if (hashParams.get('type') === 'recovery' || queryParams.get('type') === 'recovery') {
+      setIsCheckingSession(false);
+      return;
+    }
+    
+    let isMounted = true;
+
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (isMounted && session?.user && !isLoggingInRef.current) {
+          // Verify the session is still valid by checking the user
+          const { data: { user }, error } = await supabase.auth.getUser();
+
+          if (user && !error) {
+            navigate('/', { replace: true });
+          }
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    };
+
+    checkInitialSession();
+  }, [navigate, isPasswordResetMode, location]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    isLoggingInRef.current = true;
 
     const formData = new FormData(e.target);
     const email = formData.get("email");
@@ -54,83 +137,225 @@ const Auth = () => {
       // Clear any existing session first to prevent credential caching issues
       queryClient.clear();
 
+      // Step 4: Fresh login with provided credentials
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email,
+        password: password,
       });
 
       if (error) {
+        isLoggingInRef.current = false;
         toast({
           title: "Login Failed",
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        // Check user approval status
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('status')
-          .eq('id', data.user.id)
-          .single();
+        return;
+      }
 
-        if (profileError) {
-          console.error("Error fetching profile status:", profileError);
-          // Fallback: allow login if profile check fails (or handle strictly)
-          // For security, we might want to block, but let's log for now.
+      if (!data?.user) {
+        isLoggingInRef.current = false;
+        toast({
+          title: "Login Failed",
+          description: "Unable to authenticate. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 5: Verify correct user was authenticated
+      if (data.user.email?.toLowerCase() !== email.toLowerCase()) {
+        console.error('Session mismatch! Expected:', email, 'Got:', data.user.email);
+        await supabase.auth.signOut({ scope: 'local' });
+        isLoggingInRef.current = false;
+        toast({
+          title: "Session Error",
+          description: "Authentication mismatch. Please refresh and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 5: Check user approval status
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('status')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error fetching profile status:", profileError);
+      }
+
+      if (profile?.status === 'pending' || profile?.status === 'rejected') {
+        await supabase.auth.signOut({ scope: 'local' });
+        isLoggingInRef.current = false;
+        toast({
+          title: "Account Pending",
+          description: "Your account is waiting for admin approval. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 6: Handle admin login check
+      if (isAdminLogin) {
+        console.log("Checking admin privileges for user:", data.user.id);
+
+        const { data: hasAdminRole, error: roleError } = await supabase
+          .rpc('has_role', {
+            _user_id: data.user.id,
+            _role: 'admin'
+          });
+
+        if (roleError) {
+          console.error("Error checking user role:", roleError);
         }
 
-        if (profile?.status === 'pending' || profile?.status === 'rejected') {
-          await supabase.auth.signOut();
+        console.log("Admin check result:", hasAdminRole);
+
+        if (hasAdminRole === true) {
+          isLoggingInRef.current = false;
           toast({
-            title: "Account Pending",
-            description: "Your account is waiting for admin approval. Please contact support.",
+            title: "Welcome Admin",
+            description: "Successfully logged in to admin panel.",
+          });
+          navigate('/admin', { replace: true });
+        } else {
+          console.warn("User does not have admin role.");
+          await supabase.auth.signOut({ scope: 'local' });
+          isLoggingInRef.current = false;
+          toast({
+            title: "Access Denied",
+            description: "You do not have admin privileges.",
             variant: "destructive",
           });
-          return;
         }
-
-        if (isAdminLogin) {
-          console.log("Checking admin privileges for user:", data.user.id);
-
-          // Use the security definer function to check role
-          const { data: hasAdminRole, error: roleError } = await supabase
-            .rpc('has_role', {
-              _user_id: data.user.id,
-              _role: 'admin'
-            });
-
-          if (roleError) {
-            console.error("Error checking user role:", roleError);
-          }
-
-          console.log("Admin check result:", hasAdminRole);
-
-          if (hasAdminRole === true) {
-            toast({
-              title: "Welcome Admin",
-              description: "Successfully logged in to admin panel.",
-            });
-            navigate('/admin');
-          } else {
-            console.warn("User does not have admin role.");
-            // Not an admin, sign out and show error
-            await supabase.auth.signOut();
-            toast({
-              title: "Access Denied",
-              description: "You do not have admin privileges.",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Welcome back!",
-            description: "You have successfully logged in.",
-          });
-          navigate('/');
-        }
+      } else {
+        // Regular user login success
+        isLoggingInRef.current = false;
+        toast({
+          title: "Welcome back!",
+          description: `Successfully logged in as ${data.user.email}`,
+        });
+        navigate('/', { replace: true });
       }
     } catch (error) {
       console.error("Login error:", error);
+      isLoggingInRef.current = false;
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      // Ensure ref is reset even if something goes wrong
+      setTimeout(() => {
+        isLoggingInRef.current = false;
+      }, 500);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    const email = forgotPasswordEmail.trim();
+
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to reset password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      if (error) {
+        toast({
+          title: "Reset Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Reset Email Sent",
+          description: "Check your email for password reset instructions.",
+        });
+        setShowForgotPasswordDialog(false);
+        setForgotPasswordEmail("");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    
+    if (!newPassword || !confirmPassword) {
+      toast({
+        title: "Required Fields",
+        description: "Please fill in both password fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords Don't Match",
+        description: "Please make sure both passwords are the same.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        toast({
+          title: "Reset Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Password Updated",
+          description: "Your password has been successfully reset.",
+        });
+        setIsPasswordResetMode(false);
+        setNewPassword("");
+        setConfirmPassword("");
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+        navigate('/', { replace: true });
+      }
+    } catch (error) {
       toast({
         title: "Error",
         description: "An unexpected error occurred.",
@@ -146,11 +371,22 @@ const Auth = () => {
     setIsLoading(true);
 
     const formData = new FormData(e.target);
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const fullName = formData.get("fullName");
-    const shopName = formData.get("shopName");
-    const phone = formData.get("phone");
+    const email = formData.get("email")?.toString().trim();
+    const password = formData.get("password")?.toString();
+    const fullName = formData.get("fullName")?.toString().trim();
+    const shopName = formData.get("shopName")?.toString().trim();
+    const phone = formData.get("phone")?.toString().trim();
+    const gstin = formData.get("gstin")?.toString().trim();
+
+    if (!email || !password || !fullName || !shopName || !phone || !gstin) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields including GSTIN.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const redirectUrl = `${window.location.origin}/`;
@@ -164,6 +400,7 @@ const Auth = () => {
             full_name: fullName,
             shop_name: shopName,
             phone: phone,
+            gstin: gstin || null,
           }
         }
       });
@@ -190,6 +427,136 @@ const Auth = () => {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking initial session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
+  // Password Reset UI
+  if (isPasswordResetMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-3 sm:px-4 md:px-4 py-4 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="hidden sm:block absolute inset-0 overflow-hidden">
+          <div className="absolute -top-1/2 -right-1/2 w-96 h-96 bg-green-200 rounded-full opacity-20 animate-pulse"></div>
+          <div className="absolute -bottom-1/2 -left-1/2 w-96 h-96 bg-emerald-200 rounded-full opacity-20 animate-pulse delay-1000"></div>
+        </div>
+
+        <div className="w-full max-w-xs sm:max-w-sm md:max-w-md relative z-10">
+          {/* Header Section */}
+          <div className="text-center mb-4 sm:mb-6 md:mb-8 animate-fade-in">
+            <div className="flex justify-center mb-3 sm:mb-4 md:mb-6">
+              <div className="relative">
+                <div className="p-2 sm:p-3 md:p-4 bg-gradient-primary rounded-2xl shadow-glow pulse-glow">
+                  <KeyRound className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-white" />
+                </div>
+              </div>
+            </div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+              Reset Password
+            </h1>
+            <p className="text-gray-600 text-xs sm:text-sm md:text-lg">Enter your new password below</p>
+          </div>
+
+          {/* Password Reset Card */}
+          <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in p-3 sm:p-4 md:p-6">
+            <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
+              <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">New Password</CardTitle>
+              <CardDescription className="text-xs sm:text-sm md:text-base">
+                Create a strong password for your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="new-password" className="text-xs sm:text-sm font-medium">
+                    New Password <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="new-password"
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                      ) : (
+                        <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="confirm-password" className="text-xs sm:text-sm font-medium">
+                    Confirm Password <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                      ) : (
+                        <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-destructive text-xs">Passwords do not match</p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm transition-all duration-300"
+                  disabled={isLoading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                >
+                  {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
+                  Confirm New Password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Footer */}
+          <div className="text-center mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">
+            <p>Connecting agricultural businesses across networks</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-3 sm:px-4 md:px-4 py-4 relative overflow-hidden">
@@ -257,6 +624,7 @@ const Auth = () => {
                       name="email"
                       type="email"
                       placeholder="Enter your email"
+                      autoComplete="email"
                       className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
@@ -296,6 +664,16 @@ const Auth = () => {
                   <div className="text-center pt-2">
                     <button
                       type="button"
+                      onClick={() => setShowForgotPasswordDialog(true)}
+                      className="text-xs text-green-600 hover:text-green-800 transition-colors underline-offset-4 hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
                       onClick={() => setIsAdminLogin(!isAdminLogin)}
                       className="text-xs text-gray-500 hover:text-gray-800 transition-colors underline-offset-4 hover:underline"
                     >
@@ -314,6 +692,7 @@ const Auth = () => {
                         id="signup-name"
                         name="fullName"
                         placeholder="Enter your full name"
+                        autoComplete="name"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
@@ -324,21 +703,36 @@ const Auth = () => {
                         id="signup-shop"
                         name="shopName"
                         placeholder="Enter your shop name"
+                        autoComplete="organization"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         required
                       />
                     </div>
                   </div>
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
-                    <Input
-                      id="signup-phone"
-                      name="phone"
-                      type="tel"
-                      placeholder="Enter your phone number"
-                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
-                      required
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
+                      <Input
+                        id="signup-phone"
+                        name="phone"
+                        type="tel"
+                        placeholder="Enter phone number"
+                        autoComplete="tel"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-gstin" className="text-xs sm:text-sm font-medium">GSTIN <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="signup-gstin"
+                        name="gstin"
+                        placeholder="Enter GSTIN number"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
+                        maxLength={15}
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
                     <Label htmlFor="signup-email" className="text-xs sm:text-sm font-medium">Email Address</Label>
@@ -347,6 +741,7 @@ const Auth = () => {
                       name="email"
                       type="email"
                       placeholder="Enter your email"
+                      autoComplete="email"
                       className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                       required
                     />
@@ -392,6 +787,53 @@ const Auth = () => {
           <p>Connecting agricultural businesses across networks</p>
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={showForgotPasswordDialog} onOpenChange={setShowForgotPasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter your email address and we'll send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email Address</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="Enter your email"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                className="h-10"
+                required
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowForgotPasswordDialog(false);
+                  setForgotPasswordEmail("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 bg-gradient-primary"
+                disabled={isLoading}
+              >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Reset Link
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

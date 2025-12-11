@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -30,13 +31,19 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
     try {
       // Clear all queries from the cache
       queryClient.clear();
+      // Clear local storage to remove any persisted state
+      localStorage.clear();
 
       await supabase.auth.signOut();
+
       toast({
         title: "Logged out successfully",
         description: "You have been logged out of your account.",
       });
+      // Force navigation to auth page
+      window.location.href = '/auth';
     } catch (error) {
+      console.error("Logout error:", error);
       toast({
         title: "Logout failed",
         description: "An error occurred while logging out.",
