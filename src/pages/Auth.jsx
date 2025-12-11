@@ -186,6 +186,48 @@ const Auth = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const emailInput = document.getElementById('login-email');
+    const email = emailInput?.value?.trim();
+
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to reset password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      if (error) {
+        toast({
+          title: "Reset Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Reset Email Sent",
+          description: "Check your email for password reset instructions.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignUp = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -196,6 +238,7 @@ const Auth = () => {
     const fullName = formData.get("fullName")?.toString().trim();
     const shopName = formData.get("shopName")?.toString().trim();
     const phone = formData.get("phone")?.toString().trim();
+    const gstin = formData.get("gstin")?.toString().trim();
 
     if (!email || !password || !fullName || !shopName || !phone) {
       toast({
@@ -219,6 +262,7 @@ const Auth = () => {
             full_name: fullName,
             shop_name: shopName,
             phone: phone,
+            gstin: gstin || null,
           }
         }
       });
@@ -361,6 +405,17 @@ const Auth = () => {
                   <div className="text-center pt-2">
                     <button
                       type="button"
+                      onClick={handleForgotPassword}
+                      className="text-xs text-green-600 hover:text-green-800 transition-colors underline-offset-4 hover:underline"
+                      disabled={isLoading}
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
                       onClick={() => setIsAdminLogin(!isAdminLogin)}
                       className="text-xs text-gray-500 hover:text-gray-800 transition-colors underline-offset-4 hover:underline"
                     >
@@ -396,17 +451,29 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
-                    <Input
-                      id="signup-phone"
-                      name="phone"
-                      type="tel"
-                      placeholder="Enter your phone number"
-                      autoComplete="tel"
-                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
-                      required
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
+                      <Input
+                        id="signup-phone"
+                        name="phone"
+                        type="tel"
+                        placeholder="Enter phone number"
+                        autoComplete="tel"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="signup-gstin" className="text-xs sm:text-sm font-medium">GSTIN (Optional)</Label>
+                      <Input
+                        id="signup-gstin"
+                        name="gstin"
+                        placeholder="Enter GSTIN number"
+                        className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
+                        maxLength={15}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
                     <Label htmlFor="signup-email" className="text-xs sm:text-sm font-medium">Email Address</Label>

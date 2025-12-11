@@ -221,6 +221,7 @@ export type Database = {
           business_type: string | null
           created_at: string | null
           full_name: string | null
+          gstin: string | null
           id: string
           is_admin: boolean | null
           license_number: string | null
@@ -235,6 +236,7 @@ export type Database = {
           business_type?: string | null
           created_at?: string | null
           full_name?: string | null
+          gstin?: string | null
           id: string
           is_admin?: boolean | null
           license_number?: string | null
@@ -249,6 +251,7 @@ export type Database = {
           business_type?: string | null
           created_at?: string | null
           full_name?: string | null
+          gstin?: string | null
           id?: string
           is_admin?: boolean | null
           license_number?: string | null
