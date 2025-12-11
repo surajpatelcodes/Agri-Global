@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff } from "lucide-react";
+import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff, KeyRound } from "lucide-react";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -19,13 +19,44 @@ const Auth = () => {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showForgotPasswordDialog, setShowForgotPasswordDialog] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [isPasswordResetMode, setIsPasswordResetMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const isLoggingInRef = useRef(false);
 
+  // Check for password recovery mode from URL hash
+  useEffect(() => {
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const type = hashParams.get('type');
+    
+    if (type === 'recovery') {
+      setIsPasswordResetMode(true);
+      setIsCheckingSession(false);
+    }
+  }, [location]);
+
+  // Listen for auth state changes (for password recovery)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordResetMode(true);
+        setIsCheckingSession(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Check for existing session and redirect if user is already authenticated
   useEffect(() => {
+    if (isPasswordResetMode) return; // Don't redirect during password reset
+    
     let isMounted = true;
 
     const checkInitialSession = async () => {
@@ -50,9 +81,7 @@ const Auth = () => {
     };
 
     checkInitialSession();
-
-
-  }, [navigate]);
+  }, [navigate, isPasswordResetMode]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -233,6 +262,71 @@ const Auth = () => {
     }
   };
 
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    
+    if (!newPassword || !confirmPassword) {
+      toast({
+        title: "Required Fields",
+        description: "Please fill in both password fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords Don't Match",
+        description: "Please make sure both passwords are the same.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        toast({
+          title: "Reset Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Password Updated",
+          description: "Your password has been successfully reset.",
+        });
+        setIsPasswordResetMode(false);
+        setNewPassword("");
+        setConfirmPassword("");
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+        navigate('/', { replace: true });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignUp = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -300,6 +394,127 @@ const Auth = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
         <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
+  // Password Reset UI
+  if (isPasswordResetMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-3 sm:px-4 md:px-4 py-4 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="hidden sm:block absolute inset-0 overflow-hidden">
+          <div className="absolute -top-1/2 -right-1/2 w-96 h-96 bg-green-200 rounded-full opacity-20 animate-pulse"></div>
+          <div className="absolute -bottom-1/2 -left-1/2 w-96 h-96 bg-emerald-200 rounded-full opacity-20 animate-pulse delay-1000"></div>
+        </div>
+
+        <div className="w-full max-w-xs sm:max-w-sm md:max-w-md relative z-10">
+          {/* Header Section */}
+          <div className="text-center mb-4 sm:mb-6 md:mb-8 animate-fade-in">
+            <div className="flex justify-center mb-3 sm:mb-4 md:mb-6">
+              <div className="relative">
+                <div className="p-2 sm:p-3 md:p-4 bg-gradient-primary rounded-2xl shadow-glow pulse-glow">
+                  <KeyRound className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-white" />
+                </div>
+              </div>
+            </div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+              Reset Password
+            </h1>
+            <p className="text-gray-600 text-xs sm:text-sm md:text-lg">Enter your new password below</p>
+          </div>
+
+          {/* Password Reset Card */}
+          <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in p-3 sm:p-4 md:p-6">
+            <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
+              <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">New Password</CardTitle>
+              <CardDescription className="text-xs sm:text-sm md:text-base">
+                Create a strong password for your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="new-password" className="text-xs sm:text-sm font-medium">
+                    New Password <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="new-password"
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                      ) : (
+                        <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="confirm-password" className="text-xs sm:text-sm font-medium">
+                    Confirm Password <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors pr-10"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />
+                      ) : (
+                        <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-destructive text-xs">Passwords do not match</p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm transition-all duration-300"
+                  disabled={isLoading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                >
+                  {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
+                  Confirm New Password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Footer */}
+          <div className="text-center mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">
+            <p>Connecting agricultural businesses across networks</p>
+          </div>
+        </div>
       </div>
     );
   }
