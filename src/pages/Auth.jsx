@@ -30,12 +30,29 @@ const Auth = () => {
   const queryClient = useQueryClient();
   const isLoggingInRef = useRef(false);
 
-  // Check for password recovery mode from URL hash
+  // Check for password recovery mode from URL hash or query params - MUST run first
   useEffect(() => {
+    // Check hash params (Supabase uses #access_token=...&type=recovery format)
     const hashParams = new URLSearchParams(location.hash.substring(1));
-    const type = hashParams.get('type');
+    const hashType = hashParams.get('type');
     
-    if (type === 'recovery') {
+    // Also check query params in case redirect format differs
+    const queryParams = new URLSearchParams(location.search);
+    const queryType = queryParams.get('type');
+    
+    // Check for error_code which indicates password recovery flow
+    const errorCode = hashParams.get('error_code') || queryParams.get('error_code');
+    
+    console.log('Auth URL check:', { 
+      hash: location.hash, 
+      search: location.search,
+      hashType, 
+      queryType,
+      errorCode 
+    });
+    
+    if (hashType === 'recovery' || queryType === 'recovery') {
+      console.log('Password recovery mode detected from URL');
       setIsPasswordResetMode(true);
       setIsCheckingSession(false);
     }
@@ -44,18 +61,40 @@ const Auth = () => {
   // Listen for auth state changes (for password recovery)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, session?.user?.email);
+      
       if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event received');
+        setIsPasswordResetMode(true);
+        setIsCheckingSession(false);
+      }
+      
+      // Also check if we have a session with recovery type in URL
+      if (session && (location.hash.includes('type=recovery') || location.search.includes('type=recovery'))) {
+        console.log('Session with recovery type in URL');
         setIsPasswordResetMode(true);
         setIsCheckingSession(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [location]);
 
   // Check for existing session and redirect if user is already authenticated
   useEffect(() => {
-    if (isPasswordResetMode) return; // Don't redirect during password reset
+    // Don't redirect during password reset
+    if (isPasswordResetMode) {
+      setIsCheckingSession(false);
+      return;
+    }
+    
+    // Check if URL indicates recovery before doing session check
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const queryParams = new URLSearchParams(location.search);
+    if (hashParams.get('type') === 'recovery' || queryParams.get('type') === 'recovery') {
+      setIsCheckingSession(false);
+      return;
+    }
     
     let isMounted = true;
 
@@ -81,7 +120,7 @@ const Auth = () => {
     };
 
     checkInitialSession();
-  }, [navigate, isPasswordResetMode]);
+  }, [navigate, isPasswordResetMode, location]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
