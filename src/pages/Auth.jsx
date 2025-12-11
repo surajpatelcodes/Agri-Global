@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff } from "lucide-react";
 
@@ -16,6 +17,8 @@ const Auth = () => {
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [showForgotPasswordDialog, setShowForgotPasswordDialog] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -186,9 +189,9 @@ const Auth = () => {
     }
   };
 
-  const handleForgotPassword = async () => {
-    const emailInput = document.getElementById('login-email');
-    const email = emailInput?.value?.trim();
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    const email = forgotPasswordEmail.trim();
 
     if (!email) {
       toast({
@@ -216,6 +219,8 @@ const Auth = () => {
           title: "Reset Email Sent",
           description: "Check your email for password reset instructions.",
         });
+        setShowForgotPasswordDialog(false);
+        setForgotPasswordEmail("");
       }
     } catch (error) {
       toast({
@@ -240,10 +245,10 @@ const Auth = () => {
     const phone = formData.get("phone")?.toString().trim();
     const gstin = formData.get("gstin")?.toString().trim();
 
-    if (!email || !password || !fullName || !shopName || !phone) {
+    if (!email || !password || !fullName || !shopName || !phone || !gstin) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields including GSTIN.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -405,9 +410,8 @@ const Auth = () => {
                   <div className="text-center pt-2">
                     <button
                       type="button"
-                      onClick={handleForgotPassword}
+                      onClick={() => setShowForgotPasswordDialog(true)}
                       className="text-xs text-green-600 hover:text-green-800 transition-colors underline-offset-4 hover:underline"
-                      disabled={isLoading}
                     >
                       Forgot Password?
                     </button>
@@ -465,13 +469,14 @@ const Auth = () => {
                       />
                     </div>
                     <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="signup-gstin" className="text-xs sm:text-sm font-medium">GSTIN (Optional)</Label>
+                      <Label htmlFor="signup-gstin" className="text-xs sm:text-sm font-medium">GSTIN <span className="text-destructive">*</span></Label>
                       <Input
                         id="signup-gstin"
                         name="gstin"
                         placeholder="Enter GSTIN number"
                         className="h-9 sm:h-10 md:h-11 text-sm border-gray-200 focus:border-green-500 transition-colors"
                         maxLength={15}
+                        required
                       />
                     </div>
                   </div>
@@ -528,6 +533,53 @@ const Auth = () => {
           <p>Connecting agricultural businesses across networks</p>
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={showForgotPasswordDialog} onOpenChange={setShowForgotPasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter your email address and we'll send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email Address</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="Enter your email"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                className="h-10"
+                required
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowForgotPasswordDialog(false);
+                  setForgotPasswordEmail("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 bg-gradient-primary"
+                disabled={isLoading}
+              >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Reset Link
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
