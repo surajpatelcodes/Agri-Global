@@ -28,14 +28,7 @@ const Auth = () => {
 
     checkSession();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        navigate('/');
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    checkSession();
   }, [navigate]);
 
   const handleLogin = async (e) => {

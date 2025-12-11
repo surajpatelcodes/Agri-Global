@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  LayoutDashboard, 
-  Users, 
-  CreditCard, 
-  DollarSign, 
-  BarChart3, 
-  Menu, 
+import {
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  DollarSign,
+  BarChart3,
+  Menu,
   X,
   LogOut,
   Leaf,
@@ -25,12 +26,21 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
 
   const handleLogout = async () => {
     try {
+      // Clear all queries from the cache
+      queryClient.clear();
+      // Clear local storage to remove any persisted state
+      localStorage.clear();
+
       await supabase.auth.signOut();
+
       toast({
         title: "Logged out successfully",
         description: "You have been logged out of your account.",
       });
+      // Force navigation to auth page
+      window.location.href = '/auth';
     } catch (error) {
+      console.error("Logout error:", error);
       toast({
         title: "Logout failed",
         description: "An error occurred while logging out.",
@@ -136,7 +146,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
                 {isActive && (
                   <div className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20"></div>
                 )}
-                
+
                 <div className={cn(
                   "p-2.5 rounded-xl transition-all duration-300 relative z-10",
                   isActive
@@ -154,7 +164,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
                 )}>
                   {item.label}
                 </span>
-                
+
                 {/* Active indicator */}
                 {isActive && (
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -194,7 +204,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
           >
             <Menu className="h-6 w-6" />
           </Button>
-          
+
           {/* Page title */}
           <div className="flex items-center space-x-3">
             <div className="hidden lg:block">
@@ -211,7 +221,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
               </h2>
             </div>
           </div>
-          
+
           {/* Right side - could add user menu, notifications, etc. */}
           <div className="flex items-center space-x-4">
             <div className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-xl border border-green-200">
