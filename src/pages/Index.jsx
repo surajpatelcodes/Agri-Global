@@ -7,7 +7,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 const Dashboard = lazy(() => import("./Dashboard"));
 const Customers = lazy(() => import("./Customers"));
 const Credits = lazy(() => import("./Credits"));
-
+const Auth = lazy(() => import("./Auth"));
 const GlobalSearch = lazy(() => import("./GlobalSearch"));
 const Profile = lazy(() => import("./Profile"));
 
