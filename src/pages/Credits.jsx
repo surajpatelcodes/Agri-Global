@@ -18,6 +18,7 @@ import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, A
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/utils/logger";
 
 const Credits = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -79,14 +80,14 @@ const Credits = () => {
 
     setCreditHistoryLoading(true);
     try {
-      console.log("Fetching credit history for customer:", customerId, "user:", user.id);
+      logger.log("Fetching credit history for customer:", customerId, "user:", user.id);
 
       const { data, error } = await supabase.rpc('get_customer_credit_history', {
         customer_id: customerId,
         user_id: user.id
       });
 
-      console.log("Credit history response:", { data, error });
+      logger.log("Credit history response:", { data, error });
 
       if (error) throw error;
       setCreditHistoryData(data || []);
@@ -126,21 +127,31 @@ const Credits = () => {
   // Subscribe to real-time changes
   useEffect(() => {
     let creditsSubscription;
+    let userId;
 
-    try {
-      creditsSubscription = supabase
-        .channel('credits-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'credits',
-        }, () => {
-          refetch();
-        })
-        .subscribe();
-    } catch (err) {
-      console.error("Error setting up subscription:", err);
-    }
+    const setupSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        userId = user.id;
+        creditsSubscription = supabase
+          .channel('credits-changes')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'credits',
+            filter: `issued_by=eq.${userId}`
+          }, () => {
+            refetch();
+          })
+          .subscribe();
+      } catch (err) {
+        console.error("Error setting up subscription:", err);
+      }
+    };
+
+    setupSubscription();
 
     return () => {
       if (creditsSubscription) supabase.removeChannel(creditsSubscription);
@@ -174,9 +185,9 @@ const Credits = () => {
       });
 
       setIsAddDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
       e.target.reset();
     } catch (error) {
       console.error("Error adding credit:", error);
@@ -218,9 +229,9 @@ const Credits = () => {
         description: `Customer ${newStatus === 'defaulter' ? 'marked as defaulter' : 'status updated'} successfully`,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -250,9 +261,9 @@ const Credits = () => {
 
       setDefaulterConfirmOpen(false);
       setPendingStatusChange(null);
-      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
     } catch (error) {
       console.error("Error updating credit status:", error);
       toast({
@@ -299,8 +310,8 @@ const Credits = () => {
 
       setIsPartialPaymentDialogOpen(false);
       setSelectedCreditForPartial(null);
-      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
       e.target.reset();
     } catch (error) {
       console.error("Error recording partial payment:", error);
@@ -424,8 +435,8 @@ const Credits = () => {
       if (selectedCustomerHistory) {
         await fetchCreditHistory(selectedCustomerHistory.customer_id);
       }
-      queryClient.invalidateQueries({ queryKey: ['credits-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
 
     } catch (error) {
       console.error("Error marking credit as paid:", error);

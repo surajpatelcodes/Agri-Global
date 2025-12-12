@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft } from "lucide-react";
+import { logger } from "@/utils/logger";
 
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -67,36 +68,48 @@ const Customers = () => {
   useEffect(() => {
     let customersSubscription;
     let creditsSubscription;
+    let userId;
 
-    try {
-      // Subscribe to customer changes
-      customersSubscription = supabase
-        .channel('customers-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'customers',
-        }, () => {
-          // Refetch on changes (will use cache if fresh)
-          refetch();
-        })
-        .subscribe();
+    const setupSubscriptions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      // Subscribe to credit changes
-      creditsSubscription = supabase
-        .channel('credits-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'credits',
-        }, () => {
-          // Refetch on changes (will use cache if fresh)
-          refetch();
-        })
-        .subscribe();
-    } catch (err) {
-      console.error("Error setting up subscription:", err);
-    }
+        userId = user.id;
+
+        // Subscribe to customer changes
+        customersSubscription = supabase
+          .channel('customers-changes')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'customers',
+            filter: `created_by=eq.${userId}`
+          }, () => {
+            // Refetch on changes (will use cache if fresh)
+            refetch();
+          })
+          .subscribe();
+
+        // Subscribe to credit changes
+        creditsSubscription = supabase
+          .channel('credits-changes-customers')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'credits',
+            filter: `issued_by=eq.${userId}`
+          }, () => {
+            // Refetch on changes (will use cache if fresh)
+            refetch();
+          })
+          .subscribe();
+      } catch (err) {
+        console.error("Error setting up subscription:", err);
+      }
+    };
+
+    setupSubscriptions();
 
     return () => {
       if (customersSubscription) supabase.removeChannel(customersSubscription);
@@ -204,8 +217,8 @@ const Customers = () => {
       });
 
       setIsAddDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
       e.target.reset();
     } catch (error) {
       console.error("Error adding customer:", error);
@@ -284,8 +297,8 @@ const Customers = () => {
       setEditingCustomer(null);
       setEditConfirmOpen(false);
       setPendingEditData(null);
-      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
     } catch (error) {
       console.error("Error updating customer:", error);
       toast({
@@ -318,8 +331,8 @@ const Customers = () => {
 
       setDeleteConfirmOpen(false);
       setCustomerToDelete(null);
-      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
     } catch (error) {
       console.error("Error deleting customer:", error);
       toast({

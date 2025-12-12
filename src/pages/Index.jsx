@@ -10,7 +10,6 @@ const Credits = lazy(() => import("./Credits"));
 
 const GlobalSearch = lazy(() => import("./GlobalSearch"));
 const Profile = lazy(() => import("./Profile"));
-const Auth = lazy(() => import("./Auth"));
 
 const Index = () => {
   const navigate = useNavigate();
@@ -25,7 +24,7 @@ const Index = () => {
     if (hash !== activeTab && ['dashboard', 'customers', 'credits', 'profile', 'global-search'].includes(hash)) {
       setActiveTab(hash);
     }
-    
+
     // Set default hash if none present
     if (!location.hash) {
       navigate('/#dashboard', { replace: true });

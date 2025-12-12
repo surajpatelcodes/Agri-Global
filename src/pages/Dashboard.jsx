@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import AnimatedCard from "@/components/AnimatedCard";
 import { SkeletonGrid } from "@/components/SkeletonCard";
 import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
+import { logger } from "@/utils/logger";
 
 const Dashboard = memo(() => {
   usePerformanceMonitor('Dashboard');
@@ -46,41 +47,54 @@ const Dashboard = memo(() => {
   // Subscribe to real-time changes in all relevant tables
   useEffect(() => {
     let realtimeSubscription;
+    let userId;
 
-    try {
-      console.log("Setting up dashboard real-time subscriptions...");
-      realtimeSubscription = supabase
-        .channel('dashboard-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'credits',
-        }, (payload) => {
-          console.log("Real-time update detected in credits:", payload);
-          refetch();
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'customers',
-        }, (payload) => {
-          console.log("Real-time update detected in customers:", payload);
-          refetch();
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'payments',
-        }, (payload) => {
-          console.log("Real-time update detected in payments:", payload);
-          refetch();
-        })
-        .subscribe((status) => {
-          console.log("Dashboard subscription status:", status);
-        });
-    } catch (err) {
-      console.error("Error setting up dashboard subscription:", err);
-    }
+    const setupSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        userId = user.id;
+        logger.log("Setting up dashboard real-time subscriptions for user:", userId);
+
+        realtimeSubscription = supabase
+          .channel('dashboard-changes')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'credits',
+            filter: `issued_by=eq.${userId}`
+          }, (payload) => {
+            logger.log("Real-time update detected in my credits:", payload);
+            refetch();
+          })
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'customers',
+            filter: `created_by=eq.${userId}`
+          }, (payload) => {
+            logger.log("Real-time update detected in my customers:", payload);
+            refetch();
+          })
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'payments',
+            filter: `created_by=eq.${userId}`
+          }, (payload) => {
+            logger.log("Real-time update detected in my payments:", payload);
+            refetch();
+          })
+          .subscribe((status) => {
+            logger.log("Dashboard subscription status:", status);
+          });
+      } catch (err) {
+        console.error("Error setting up dashboard subscription:", err);
+      }
+    };
+
+    setupSubscription();
 
     return () => {
       if (realtimeSubscription) supabase.removeChannel(realtimeSubscription);

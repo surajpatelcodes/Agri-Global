@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff, KeyRound } from "lucide-react";
+import { logger } from "@/utils/logger";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -35,24 +36,24 @@ const Auth = () => {
     // Check hash params (Supabase uses #access_token=...&type=recovery format)
     const hashParams = new URLSearchParams(location.hash.substring(1));
     const hashType = hashParams.get('type');
-    
+
     // Also check query params in case redirect format differs
     const queryParams = new URLSearchParams(location.search);
     const queryType = queryParams.get('type');
-    
+
     // Check for error_code which indicates password recovery flow
     const errorCode = hashParams.get('error_code') || queryParams.get('error_code');
-    
-    console.log('Auth URL check:', { 
-      hash: location.hash, 
+
+    logger.log('Auth URL check:', {
+      hash: location.hash,
       search: location.search,
-      hashType, 
+      hashType,
       queryType,
-      errorCode 
+      errorCode
     });
-    
+
     if (hashType === 'recovery' || queryType === 'recovery') {
-      console.log('Password recovery mode detected from URL');
+      logger.log('Password recovery mode detected from URL');
       setIsPasswordResetMode(true);
       setIsCheckingSession(false);
     }
@@ -61,17 +62,17 @@ const Auth = () => {
   // Listen for auth state changes (for password recovery)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', event, session?.user?.email);
-      
+      logger.log('Auth state change:', event, session?.user?.email);
+
       if (event === 'PASSWORD_RECOVERY') {
-        console.log('PASSWORD_RECOVERY event received');
+        logger.log('PASSWORD_RECOVERY event received');
         setIsPasswordResetMode(true);
         setIsCheckingSession(false);
       }
-      
+
       // Also check if we have a session with recovery type in URL
       if (session && (location.hash.includes('type=recovery') || location.search.includes('type=recovery'))) {
-        console.log('Session with recovery type in URL');
+        logger.log('Session with recovery type in URL');
         setIsPasswordResetMode(true);
         setIsCheckingSession(false);
       }
@@ -87,7 +88,7 @@ const Auth = () => {
       setIsCheckingSession(false);
       return;
     }
-    
+
     // Check if URL indicates recovery before doing session check
     const hashParams = new URLSearchParams(location.hash.substring(1));
     const queryParams = new URLSearchParams(location.search);
@@ -95,7 +96,7 @@ const Auth = () => {
       setIsCheckingSession(false);
       return;
     }
-    
+
     let isMounted = true;
 
     const checkInitialSession = async () => {
@@ -106,12 +107,14 @@ const Auth = () => {
           // Verify the session is still valid by checking the user
           const { data: { user }, error } = await supabase.auth.getUser();
 
-          if (user && !error) {
+          if (user && !error && isMounted) {
             navigate('/', { replace: true });
           }
         }
       } catch (error) {
-        console.error('Session check error:', error);
+        if (isMounted) {
+          console.error('Session check error:', error);
+        }
       } finally {
         if (isMounted) {
           setIsCheckingSession(false);
@@ -120,6 +123,10 @@ const Auth = () => {
     };
 
     checkInitialSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [navigate, isPasswordResetMode, location]);
 
   const handleLogin = async (e) => {
@@ -132,8 +139,6 @@ const Auth = () => {
     const password = formData.get("password");
 
     try {
-      // Clear any existing session first to prevent credential caching issues
-      queryClient.clear();
       // Clear any existing session first to prevent credential caching issues
       queryClient.clear();
 
@@ -200,7 +205,7 @@ const Auth = () => {
 
       // Step 6: Handle admin login check
       if (isAdminLogin) {
-        console.log("Checking admin privileges for user:", data.user.id);
+        logger.log("Checking admin privileges for user:", data.user.id);
 
         const { data: hasAdminRole, error: roleError } = await supabase
           .rpc('has_role', {
@@ -212,7 +217,7 @@ const Auth = () => {
           console.error("Error checking user role:", roleError);
         }
 
-        console.log("Admin check result:", hasAdminRole);
+        logger.log("Admin check result:", hasAdminRole);
 
         if (hasAdminRole === true) {
           isLoggingInRef.current = false;
@@ -222,7 +227,7 @@ const Auth = () => {
           });
           navigate('/admin', { replace: true });
         } else {
-          console.warn("User does not have admin role.");
+          logger.warn("User does not have admin role.");
           await supabase.auth.signOut({ scope: 'local' });
           isLoggingInRef.current = false;
           toast({
@@ -303,7 +308,7 @@ const Auth = () => {
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
-    
+
     if (!newPassword || !confirmPassword) {
       toast({
         title: "Required Fields",

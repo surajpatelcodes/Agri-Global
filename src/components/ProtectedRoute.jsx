@@ -8,6 +8,7 @@ const ProtectedRoute = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [isApproved, setIsApproved] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isSigningOut, setIsSigningOut] = useState(false);
     const location = useLocation();
     const { toast } = useToast();
 
@@ -58,6 +59,28 @@ const ProtectedRoute = ({ children }) => {
         return () => subscription.unsubscribe();
     }, []);
 
+    // Handle unapproved users - sign out asynchronously
+    useEffect(() => {
+        if (!loading && isAuthenticated && !isApproved && !isSigningOut) {
+            setIsSigningOut(true);
+
+            const handleSignOut = async () => {
+                try {
+                    await supabase.auth.signOut();
+                    toast({
+                        title: "Access Denied",
+                        description: "Your account is awaiting admin approval.",
+                        variant: "destructive",
+                    });
+                } catch (error) {
+                    console.error('Error signing out:', error);
+                }
+            };
+
+            handleSignOut();
+        }
+    }, [loading, isAuthenticated, isApproved, isSigningOut, toast]);
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
@@ -71,20 +94,12 @@ const ProtectedRoute = ({ children }) => {
     }
 
     if (!isApproved) {
-        // If logged in but not approved, sign out and redirect to auth with message
-        // We can't easily show toast here before redirecting, so we might need a "Pending" page
-        // OR we just redirect to auth and let Auth page handle the "already logged in but pending" state?
-        // Actually, better to sign out here to prevent infinite loops if Auth page redirects back.
-
-        supabase.auth.signOut().then(() => {
-            toast({
-                title: "Access Denied",
-                description: "Your account is awaiting admin approval.",
-                variant: "destructive",
-            });
-        });
-
-        return <Navigate to="/auth" replace />;
+        // Show loading while signing out
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <LoadingSpinner text="Signing out..." />
+            </div>
+        );
     }
 
     return children;
