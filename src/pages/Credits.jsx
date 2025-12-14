@@ -37,9 +37,8 @@ const Credits = () => {
   const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false);
   const [selectedCreditForMarkPaid, setSelectedCreditForMarkPaid] = useState(null);
   
-  // New states for partial payment from history
+  // New states for payment from history
   const [historyPartialPaymentOpen, setHistoryPartialPaymentOpen] = useState(false);
-  const [selectedCreditForHistoryPartial, setSelectedCreditForHistoryPartial] = useState(null);
   const [historyPartialAmount, setHistoryPartialAmount] = useState("");
   const [historyPartialDate, setHistoryPartialDate] = useState(new Date());
   const [historyPartialMethod, setHistoryPartialMethod] = useState("cash");
@@ -466,15 +465,15 @@ const Credits = () => {
     }
   };
 
-  // Handle partial payment from credit history
+  // Handle payment from credit history - auto-distribute to pending credits
   const handleHistoryPartialPayment = async () => {
-    if (!selectedCreditForHistoryPartial || !historyPartialAmount) return;
+    if (!historyPartialAmount || !selectedCustomerHistory) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const partialAmount = parseFloat(historyPartialAmount);
+      const paymentAmount = parseFloat(historyPartialAmount);
 
-      if (partialAmount <= 0) {
+      if (paymentAmount <= 0) {
         toast({
           title: "Error",
           description: "Payment amount must be greater than 0",
@@ -483,12 +482,26 @@ const Credits = () => {
         return;
       }
 
+      // Get the first pending credit to link the payment to
+      const pendingCredits = creditHistoryData.filter(c => c.status !== 'paid');
+      if (pendingCredits.length === 0) {
+        toast({
+          title: "Error",
+          description: "No pending credits found for this customer",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Link payment to the oldest pending credit
+      const targetCredit = pendingCredits[pendingCredits.length - 1]; // oldest first
+
       // Insert payment record
       const { error: paymentError } = await supabase
         .from("payments")
         .insert([{
-          credit_id: selectedCreditForHistoryPartial.id,
-          amount: partialAmount,
+          credit_id: targetCredit.id,
+          amount: paymentAmount,
           payment_date: format(historyPartialDate, "yyyy-MM-dd"),
           payment_method: historyPartialMethod,
           created_by: user?.id
@@ -496,23 +509,22 @@ const Credits = () => {
 
       if (paymentError) throw paymentError;
 
-      // Update credit status to partial (if not already paid)
+      // Update credit status to partial
       const { error: statusError } = await supabase
         .from("credits")
         .update({ status: "partial" })
-        .eq("id", selectedCreditForHistoryPartial.id);
+        .eq("id", targetCredit.id);
 
       if (statusError) throw statusError;
 
       toast({
         title: "Success",
-        description: `Partial payment of ${formatCurrency(partialAmount)} recorded successfully`,
+        description: `Payment of ${formatCurrency(paymentAmount)} recorded successfully`,
       });
 
       // Reset states
       setHistoryPartialConfirmOpen(false);
       setHistoryPartialPaymentOpen(false);
-      setSelectedCreditForHistoryPartial(null);
       setHistoryPartialAmount("");
       setHistoryPartialDate(new Date());
       setHistoryPartialMethod("cash");
@@ -525,10 +537,10 @@ const Credits = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
 
     } catch (error) {
-      console.error("Error recording partial payment:", error);
+      console.error("Error recording payment:", error);
       toast({
         title: "Error",
-        description: "Failed to record partial payment: " + error.message,
+        description: "Failed to record payment: " + error.message,
         variant: "destructive",
       });
     }
@@ -1042,36 +1054,19 @@ const Credits = () => {
                               Edit
                             </Button>
 
-                            {/* Partial Payment Button for individual credit */}
                             {credit.status !== 'paid' && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
-                                  onClick={() => {
-                                    setSelectedCreditForHistoryPartial(credit);
-                                    setHistoryPartialAmount("");
-                                    setHistoryPartialPaymentOpen(true);
-                                  }}
-                                >
-                                  <Wallet className="h-3 w-3 mr-1" />
-                                  Partial
-                                </Button>
-
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
-                                  onClick={() => {
-                                    setSelectedCreditForMarkPaid(credit);
-                                    setMarkPaidConfirmOpen(true);
-                                  }}
-                                >
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Mark Paid
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                                onClick={() => {
+                                  setSelectedCreditForMarkPaid(credit);
+                                  setMarkPaidConfirmOpen(true);
+                                }}
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                Mark Paid
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -1091,151 +1086,108 @@ const Credits = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5 text-blue-600" />
-              Receive Partial Payment
+              Receive Payment
             </DialogTitle>
             <DialogDescription>
-              Record a partial payment for {selectedCustomerHistory?.name}
-              {selectedCreditForHistoryPartial && (
-                <span className="block mt-1 font-medium text-gray-900">
-                  Credit Amount: {formatCurrency(selectedCreditForHistoryPartial.amount)}
-                </span>
-              )}
+              Record a payment for {selectedCustomerHistory?.name}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Select credit if not already selected */}
-          {!selectedCreditForHistoryPartial && creditHistoryData.filter(c => c.status !== 'paid').length > 0 && (
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Select Credit</Label>
-              <Select onValueChange={(value) => {
-                const credit = creditHistoryData.find(c => String(c.id) === value);
-                setSelectedCreditForHistoryPartial(credit);
-              }}>
+              <Label htmlFor="history_partial_amount">Payment Amount (₹)</Label>
+              <Input
+                id="history_partial_amount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Enter payment amount"
+                value={historyPartialAmount}
+                onChange={(e) => setHistoryPartialAmount(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !historyPartialDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {historyPartialDate ? format(historyPartialDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={historyPartialDate}
+                    onSelect={setHistoryPartialDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select value={historyPartialMethod} onValueChange={setHistoryPartialMethod}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a credit..." />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {creditHistoryData.filter(c => c.status !== 'paid').map((credit) => (
-                    <SelectItem key={credit.id} value={String(credit.id)}>
-                      {formatCurrency(credit.amount)} - {formatDate(credit.created_at)} ({credit.status})
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          {selectedCreditForHistoryPartial && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="history_partial_amount">Payment Amount (₹)</Label>
-                <Input
-                  id="history_partial_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={selectedCreditForHistoryPartial.amount}
-                  placeholder="Enter payment amount"
-                  value={historyPartialAmount}
-                  onChange={(e) => setHistoryPartialAmount(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Payment Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !historyPartialDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {historyPartialDate ? format(historyPartialDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={historyPartialDate}
-                      onSelect={setHistoryPartialDate}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <Select value={historyPartialMethod} onValueChange={setHistoryPartialMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="upi">UPI</SelectItem>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  className="flex-1"
-                  onClick={() => setHistoryPartialConfirmOpen(true)}
-                  disabled={!historyPartialAmount || parseFloat(historyPartialAmount) <= 0}
-                >
-                  Receive Payment
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setHistoryPartialPaymentOpen(false);
-                    setSelectedCreditForHistoryPartial(null);
-                    setHistoryPartialAmount("");
-                  }}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
+            <div className="flex gap-3">
+              <Button
+                className="flex-1"
+                onClick={() => setHistoryPartialConfirmOpen(true)}
+                disabled={!historyPartialAmount || parseFloat(historyPartialAmount) <= 0}
+              >
+                Receive Payment
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setHistoryPartialPaymentOpen(false);
+                  setHistoryPartialAmount("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
             </div>
-          )}
-
-          {!selectedCreditForHistoryPartial && creditHistoryData.filter(c => c.status !== 'paid').length === 0 && (
-            <div className="text-center py-4">
-              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-2" />
-              <p className="text-gray-600">All credits are fully paid!</p>
-            </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Partial Payment Confirmation Dialog */}
+      {/* Payment Confirmation Dialog */}
       <AlertDialog open={historyPartialConfirmOpen} onOpenChange={setHistoryPartialConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-blue-600 flex items-center gap-2">
               <Wallet className="h-5 w-5" />
-              Confirm Partial Payment
+              Confirm Payment
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to receive a partial payment of{" "}
+              Are you sure you want to receive a payment of{" "}
               <span className="font-bold text-gray-900">
                 {historyPartialAmount && formatCurrency(parseFloat(historyPartialAmount))}
               </span>
               {" "}from {selectedCustomerHistory?.name}?
-              <br /><br />
-              This will be deducted from the credit of{" "}
-              <span className="font-bold text-gray-900">
-                {selectedCreditForHistoryPartial && formatCurrency(selectedCreditForHistoryPartial.amount)}
-              </span>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
