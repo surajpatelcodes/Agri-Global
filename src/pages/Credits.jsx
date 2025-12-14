@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft, Check, ChevronsUpDown, CheckCircle2 } from "lucide-react";
+import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft, Check, ChevronsUpDown, CheckCircle2, Pencil, Wallet } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,24 @@ const Credits = () => {
   const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
   const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false);
   const [selectedCreditForMarkPaid, setSelectedCreditForMarkPaid] = useState(null);
+  
+  // New states for partial payment from history
+  const [historyPartialPaymentOpen, setHistoryPartialPaymentOpen] = useState(false);
+  const [selectedCreditForHistoryPartial, setSelectedCreditForHistoryPartial] = useState(null);
+  const [historyPartialAmount, setHistoryPartialAmount] = useState("");
+  const [historyPartialDate, setHistoryPartialDate] = useState(new Date());
+  const [historyPartialMethod, setHistoryPartialMethod] = useState("cash");
+  const [historyPartialConfirmOpen, setHistoryPartialConfirmOpen] = useState(false);
+  
+  // New states for edit credit transaction
+  const [editCreditOpen, setEditCreditOpen] = useState(false);
+  const [selectedCreditForEdit, setSelectedCreditForEdit] = useState(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPasswordConfirmOpen, setEditPasswordConfirmOpen] = useState(false);
+  const [editPassword, setEditPassword] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -448,6 +466,155 @@ const Credits = () => {
     }
   };
 
+  // Handle partial payment from credit history
+  const handleHistoryPartialPayment = async () => {
+    if (!selectedCreditForHistoryPartial || !historyPartialAmount) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const partialAmount = parseFloat(historyPartialAmount);
+
+      if (partialAmount <= 0) {
+        toast({
+          title: "Error",
+          description: "Payment amount must be greater than 0",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert([{
+          credit_id: selectedCreditForHistoryPartial.id,
+          amount: partialAmount,
+          payment_date: format(historyPartialDate, "yyyy-MM-dd"),
+          payment_method: historyPartialMethod,
+          created_by: user?.id
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      // Update credit status to partial (if not already paid)
+      const { error: statusError } = await supabase
+        .from("credits")
+        .update({ status: "partial" })
+        .eq("id", selectedCreditForHistoryPartial.id);
+
+      if (statusError) throw statusError;
+
+      toast({
+        title: "Success",
+        description: `Partial payment of ${formatCurrency(partialAmount)} recorded successfully`,
+      });
+
+      // Reset states
+      setHistoryPartialConfirmOpen(false);
+      setHistoryPartialPaymentOpen(false);
+      setSelectedCreditForHistoryPartial(null);
+      setHistoryPartialAmount("");
+      setHistoryPartialDate(new Date());
+      setHistoryPartialMethod("cash");
+
+      // Refresh data
+      if (selectedCustomerHistory) {
+        await fetchCreditHistory(selectedCustomerHistory.customer_id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
+
+    } catch (error) {
+      console.error("Error recording partial payment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to record partial payment: " + error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle edit credit with password confirmation
+  const handleEditCredit = async () => {
+    if (!selectedCreditForEdit || !editPassword) return;
+
+    setEditLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Verify password by re-authenticating
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: editPassword
+      });
+
+      if (authError) {
+        toast({
+          title: "Authentication Failed",
+          description: "Incorrect password. Please try again.",
+          variant: "destructive",
+        });
+        setEditLoading(false);
+        return;
+      }
+
+      // Update credit
+      const updateData = {};
+      if (editAmount && parseFloat(editAmount) > 0) {
+        updateData.amount = parseFloat(editAmount);
+      }
+      if (editDescription !== undefined) {
+        updateData.description = editDescription;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        toast({
+          title: "No Changes",
+          description: "No changes were made to the credit.",
+        });
+        setEditLoading(false);
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("credits")
+        .update(updateData)
+        .eq("id", selectedCreditForEdit.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Success",
+        description: "Credit transaction updated successfully",
+      });
+
+      // Reset states
+      setEditPasswordConfirmOpen(false);
+      setEditCreditOpen(false);
+      setSelectedCreditForEdit(null);
+      setEditAmount("");
+      setEditDescription("");
+      setEditPassword("");
+
+      // Refresh data
+      if (selectedCustomerHistory) {
+        await fetchCreditHistory(selectedCustomerHistory.customer_id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
+
+    } catch (error) {
+      console.error("Error updating credit:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update credit: " + error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -797,11 +964,21 @@ const Credits = () => {
       {/* Credit History Dialog */}
       <Dialog open={creditHistoryDialogOpen} onOpenChange={setCreditHistoryDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
-          {/* Sticky header: customer name + aggregated status stays fixed */}
+          {/* Sticky header: customer name + receive partial payment button */}
           <div className="sticky top-0 z-20 bg-white border-b shadow-sm transition-shadow dark:bg-slate-900">
             <DialogHeader className="p-4 relative pt-6 pr-12">
-              <div className="flex items-center gap-3 max-w-[90%]">
-                <DialogTitle className="truncate">Credit History - {selectedCustomerHistory?.name}</DialogTitle>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 max-w-[60%]">
+                  <DialogTitle className="truncate">Credit History - {selectedCustomerHistory?.name}</DialogTitle>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => setHistoryPartialPaymentOpen(true)}
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Receive Payment
+                </Button>
               </div>
               <DialogDescription>
                 Complete credit transaction history for this customer
@@ -848,20 +1025,55 @@ const Credits = () => {
                             {credit.status?.charAt(0).toUpperCase() + credit.status?.slice(1)}
                           </Badge>
 
-                          {credit.status !== 'paid' && (
+                          <div className="flex gap-2">
+                            {/* Edit Button */}
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                              className="h-8 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                               onClick={() => {
-                                setSelectedCreditForMarkPaid(credit);
-                                setMarkPaidConfirmOpen(true);
+                                setSelectedCreditForEdit(credit);
+                                setEditAmount(String(credit.amount));
+                                setEditDescription(credit.description || "");
+                                setEditCreditOpen(true);
                               }}
                             >
-                              <Check className="h-3 w-3 mr-1" />
-                              Mark as Paid
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Edit
                             </Button>
-                          )}
+
+                            {/* Partial Payment Button for individual credit */}
+                            {credit.status !== 'paid' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                                  onClick={() => {
+                                    setSelectedCreditForHistoryPartial(credit);
+                                    setHistoryPartialAmount("");
+                                    setHistoryPartialPaymentOpen(true);
+                                  }}
+                                >
+                                  <Wallet className="h-3 w-3 mr-1" />
+                                  Partial
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                                  onClick={() => {
+                                    setSelectedCreditForMarkPaid(credit);
+                                    setMarkPaidConfirmOpen(true);
+                                  }}
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Mark Paid
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -872,6 +1084,286 @@ const Credits = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* History Partial Payment Dialog */}
+      <Dialog open={historyPartialPaymentOpen} onOpenChange={setHistoryPartialPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-blue-600" />
+              Receive Partial Payment
+            </DialogTitle>
+            <DialogDescription>
+              Record a partial payment for {selectedCustomerHistory?.name}
+              {selectedCreditForHistoryPartial && (
+                <span className="block mt-1 font-medium text-gray-900">
+                  Credit Amount: {formatCurrency(selectedCreditForHistoryPartial.amount)}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Select credit if not already selected */}
+          {!selectedCreditForHistoryPartial && creditHistoryData.filter(c => c.status !== 'paid').length > 0 && (
+            <div className="space-y-2">
+              <Label>Select Credit</Label>
+              <Select onValueChange={(value) => {
+                const credit = creditHistoryData.find(c => String(c.id) === value);
+                setSelectedCreditForHistoryPartial(credit);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a credit..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {creditHistoryData.filter(c => c.status !== 'paid').map((credit) => (
+                    <SelectItem key={credit.id} value={String(credit.id)}>
+                      {formatCurrency(credit.amount)} - {formatDate(credit.created_at)} ({credit.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {selectedCreditForHistoryPartial && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="history_partial_amount">Payment Amount (₹)</Label>
+                <Input
+                  id="history_partial_amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={selectedCreditForHistoryPartial.amount}
+                  placeholder="Enter payment amount"
+                  value={historyPartialAmount}
+                  onChange={(e) => setHistoryPartialAmount(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Payment Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !historyPartialDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {historyPartialDate ? format(historyPartialDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={historyPartialDate}
+                      onSelect={setHistoryPartialDate}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <Select value={historyPartialMethod} onValueChange={setHistoryPartialMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  onClick={() => setHistoryPartialConfirmOpen(true)}
+                  disabled={!historyPartialAmount || parseFloat(historyPartialAmount) <= 0}
+                >
+                  Receive Payment
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setHistoryPartialPaymentOpen(false);
+                    setSelectedCreditForHistoryPartial(null);
+                    setHistoryPartialAmount("");
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!selectedCreditForHistoryPartial && creditHistoryData.filter(c => c.status !== 'paid').length === 0 && (
+            <div className="text-center py-4">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-2" />
+              <p className="text-gray-600">All credits are fully paid!</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Payment Confirmation Dialog */}
+      <AlertDialog open={historyPartialConfirmOpen} onOpenChange={setHistoryPartialConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-blue-600 flex items-center gap-2">
+              <Wallet className="h-5 w-5" />
+              Confirm Partial Payment
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to receive a partial payment of{" "}
+              <span className="font-bold text-gray-900">
+                {historyPartialAmount && formatCurrency(parseFloat(historyPartialAmount))}
+              </span>
+              {" "}from {selectedCustomerHistory?.name}?
+              <br /><br />
+              This will be deducted from the credit of{" "}
+              <span className="font-bold text-gray-900">
+                {selectedCreditForHistoryPartial && formatCurrency(selectedCreditForHistoryPartial.amount)}
+              </span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setHistoryPartialConfirmOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleHistoryPartialPayment}
+              className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
+            >
+              Confirm Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Credit Dialog */}
+      <Dialog open={editCreditOpen} onOpenChange={setEditCreditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-blue-600" />
+              Edit Credit Transaction
+            </DialogTitle>
+            <DialogDescription>
+              Modify the credit details. This requires password confirmation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> Editing a credit transaction requires your account password for security.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_amount">Amount (₹)</Label>
+              <Input
+                id="edit_amount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Enter new amount"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_description">Description</Label>
+              <Textarea
+                id="edit_description"
+                placeholder="Enter description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1"
+                onClick={() => setEditPasswordConfirmOpen(true)}
+                disabled={!editAmount || parseFloat(editAmount) <= 0}
+              >
+                Save Changes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditCreditOpen(false);
+                  setSelectedCreditForEdit(null);
+                  setEditAmount("");
+                  setEditDescription("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Confirmation Dialog for Edit */}
+      <AlertDialog open={editPasswordConfirmOpen} onOpenChange={setEditPasswordConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-orange-600 flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Confirm Password
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Please enter your account password to confirm this modification.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-4">
+            <Label htmlFor="confirm_password">Password</Label>
+            <Input
+              id="confirm_password"
+              type="password"
+              placeholder="Enter your password"
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              className="mt-2"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setEditPasswordConfirmOpen(false);
+              setEditPassword("");
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleEditCredit}
+              disabled={!editPassword || editLoading}
+              className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-600"
+            >
+              {editLoading ? "Verifying..." : "Confirm & Save"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
