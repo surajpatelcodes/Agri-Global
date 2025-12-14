@@ -104,6 +104,23 @@ const Customers = () => {
             refetch();
           })
           .subscribe();
+
+        // Subscribe to payment changes
+        const paymentsSubscription = supabase
+          .channel('payments-changes-customers')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'payments',
+            filter: `created_by=eq.${userId}`
+          }, () => {
+            // Refetch on changes (will use cache if fresh)
+            refetch();
+          })
+          .subscribe();
+
+        // Store for cleanup
+        customersSubscription._paymentsSubscription = paymentsSubscription;
       } catch (err) {
         console.error("Error setting up subscription:", err);
       }
@@ -114,6 +131,9 @@ const Customers = () => {
     return () => {
       if (customersSubscription) supabase.removeChannel(customersSubscription);
       if (creditsSubscription) supabase.removeChannel(creditsSubscription);
+      if (customersSubscription?._paymentsSubscription) {
+        supabase.removeChannel(customersSubscription._paymentsSubscription);
+      }
     };
   }, [refetch]);
 

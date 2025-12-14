@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft, Check, ChevronsUpDown, CheckCircle2, Pencil, Wallet } from "lucide-react";
+import { Plus, Search, CreditCard, User, Calendar as CalendarIcon, DollarSign, ArrowLeft, Check, ChevronsUpDown, CheckCircle2, Pencil, Wallet, MoreVertical } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -36,14 +37,14 @@ const Credits = () => {
   const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
   const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false);
   const [selectedCreditForMarkPaid, setSelectedCreditForMarkPaid] = useState(null);
-  
+
   // New states for payment from history
   const [historyPartialPaymentOpen, setHistoryPartialPaymentOpen] = useState(false);
   const [historyPartialAmount, setHistoryPartialAmount] = useState("");
   const [historyPartialDate, setHistoryPartialDate] = useState(new Date());
   const [historyPartialMethod, setHistoryPartialMethod] = useState("cash");
   const [historyPartialConfirmOpen, setHistoryPartialConfirmOpen] = useState(false);
-  
+
   // New states for edit credit transaction
   const [editCreditOpen, setEditCreditOpen] = useState(false);
   const [selectedCreditForEdit, setSelectedCreditForEdit] = useState(null);
@@ -51,8 +52,15 @@ const Credits = () => {
   const [editDescription, setEditDescription] = useState("");
   const [editPasswordConfirmOpen, setEditPasswordConfirmOpen] = useState(false);
   const [editPassword, setEditPassword] = useState("");
+
+  // New states for individual transaction partial payment
+  const [transactionPartialPaymentOpen, setTransactionPartialPaymentOpen] = useState(false);
+  const [selectedCreditForTransactionPartial, setSelectedCreditForTransactionPartial] = useState(null);
+  const [transactionPartialAmount, setTransactionPartialAmount] = useState("");
+  const [transactionPartialDate, setTransactionPartialDate] = useState(new Date());
+  const [transactionPartialMethod, setTransactionPartialMethod] = useState("cash");
   const [editLoading, setEditLoading] = useState(false);
-  
+
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -453,6 +461,8 @@ const Credits = () => {
         await fetchCreditHistory(selectedCustomerHistory.customer_id);
       }
       queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
 
     } catch (error) {
@@ -534,6 +544,8 @@ const Credits = () => {
         await fetchCreditHistory(selectedCustomerHistory.customer_id);
       }
       queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
 
     } catch (error) {
@@ -553,7 +565,7 @@ const Credits = () => {
     setEditLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       // Verify password by re-authenticating
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: user.email,
@@ -613,6 +625,8 @@ const Credits = () => {
         await fetchCreditHistory(selectedCustomerHistory.customer_id);
       }
       queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
 
     } catch (error) {
@@ -624,6 +638,86 @@ const Credits = () => {
       });
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  // Handle partial payment for individual transaction from dropdown menu
+  const handleTransactionPartialPayment = async () => {
+    if (!transactionPartialAmount || !selectedCreditForTransactionPartial) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const paymentAmount = parseFloat(transactionPartialAmount);
+      const outstandingAmount = selectedCreditForTransactionPartial.outstanding ?? selectedCreditForTransactionPartial.amount;
+
+      if (paymentAmount <= 0) {
+        toast({
+          title: "Error",
+          description: "Payment amount must be greater than 0",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate payment doesn't exceed outstanding amount
+      if (paymentAmount > outstandingAmount) {
+        toast({
+          title: "Error",
+          description: `Payment amount cannot exceed outstanding balance of ${formatCurrency(outstandingAmount)}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert([{
+          credit_id: selectedCreditForTransactionPartial.id,
+          amount: paymentAmount,
+          payment_date: format(transactionPartialDate, "yyyy-MM-dd"),
+          payment_method: transactionPartialMethod,
+          created_by: user?.id
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      // Update credit status to partial
+      const { error: statusError } = await supabase
+        .from("credits")
+        .update({ status: "partial" })
+        .eq("id", selectedCreditForTransactionPartial.id);
+
+      if (statusError) throw statusError;
+
+      toast({
+        title: "Success",
+        description: `Partial payment of ${formatCurrency(paymentAmount)} recorded successfully`,
+      });
+
+      // Reset states
+      setTransactionPartialPaymentOpen(false);
+      setSelectedCreditForTransactionPartial(null);
+      setTransactionPartialAmount("");
+      setTransactionPartialDate(new Date());
+      setTransactionPartialMethod("cash");
+
+      // Refresh data
+      if (selectedCustomerHistory) {
+        await fetchCreditHistory(selectedCustomerHistory.customer_id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
+
+    } catch (error) {
+      console.error("Error recording partial payment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to record partial payment: " + error.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -777,8 +871,13 @@ const Credits = () => {
                       <div className="flex items-center space-x-2">
                         <DollarSign className="h-4 w-4 text-gray-500" />
                         <span className="font-bold text-lg">
-                          {formatCurrency(creditSummary.total_credit_amount)}
+                          {formatCurrency(creditSummary.outstanding_amount ?? creditSummary.total_credit_amount)}
                         </span>
+                        {creditSummary.total_payments > 0 && (
+                          <span className="text-sm text-gray-500">
+                            (Paid: {formatCurrency(creditSummary.total_payments)})
+                          </span>
+                        )}
                       </div>
                       <Badge variant="secondary">
                         {creditSummary.credit_count} {creditSummary.credit_count === 1 ? 'Credit' : 'Credits'}
@@ -976,22 +1075,10 @@ const Credits = () => {
       {/* Credit History Dialog */}
       <Dialog open={creditHistoryDialogOpen} onOpenChange={setCreditHistoryDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
-          {/* Sticky header: customer name + receive partial payment button */}
+          {/* Sticky header: customer name */}
           <div className="sticky top-0 z-20 bg-white border-b shadow-sm transition-shadow dark:bg-slate-900">
             <DialogHeader className="p-4 relative pt-6 pr-12">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 max-w-[60%]">
-                  <DialogTitle className="truncate">Credit History - {selectedCustomerHistory?.name}</DialogTitle>
-                </div>
-                <Button
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => setHistoryPartialPaymentOpen(true)}
-                >
-                  <Wallet className="h-4 w-4 mr-2" />
-                  Receive Payment
-                </Button>
-              </div>
+              <DialogTitle className="truncate">Credit History - {selectedCustomerHistory?.name}</DialogTitle>
               <DialogDescription>
                 Complete credit transaction history for this customer
               </DialogDescription>
@@ -1026,7 +1113,21 @@ const Credits = () => {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-semibold text-lg">{formatCurrency(credit.amount)}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-lg">
+                              {formatCurrency(credit.outstanding ?? credit.amount)}
+                            </p>
+                            {credit.total_paid > 0 && (
+                              <span className="text-sm text-green-600">
+                                (Paid: {formatCurrency(credit.total_paid)})
+                              </span>
+                            )}
+                          </div>
+                          {credit.total_paid > 0 && (
+                            <p className="text-xs text-gray-400">
+                              Original: {formatCurrency(credit.amount)}
+                            </p>
+                          )}
                           <p className="text-sm text-gray-500">{formatDate(credit.created_at)}</p>
                           {credit.description && (
                             <p className="text-sm text-gray-600 mt-2">{credit.description}</p>
@@ -1037,38 +1138,67 @@ const Credits = () => {
                             {credit.status?.charAt(0).toUpperCase() + credit.status?.slice(1)}
                           </Badge>
 
-                          <div className="flex gap-2">
-                            {/* Edit Button */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                              onClick={() => {
-                                setSelectedCreditForEdit(credit);
-                                setEditAmount(String(credit.amount));
-                                setEditDescription(credit.description || "");
-                                setEditCreditOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3 mr-1" />
-                              Edit
-                            </Button>
-
-                            {credit.status !== 'paid' && (
+                          {/* Three-dot Menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
+                                variant="ghost"
                                 size="sm"
-                                variant="outline"
-                                className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                                className="h-8 w-8 p-0 hover:bg-gray-100"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {/* Mark as Paid option - only show if not already paid */}
+                              {credit.status !== 'paid' && (
+                                <DropdownMenuItem
+                                  className="text-green-600 focus:text-green-700 focus:bg-green-50 cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedCreditForMarkPaid(credit);
+                                    setMarkPaidConfirmOpen(true);
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Mark as Paid
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* Partial Payment option - only show if not already paid */}
+                              {credit.status !== 'paid' && (
+                                <DropdownMenuItem
+                                  className="text-orange-600 focus:text-orange-700 focus:bg-orange-50 cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedCreditForTransactionPartial(credit);
+                                    setTransactionPartialAmount("");
+                                    setTransactionPartialDate(new Date());
+                                    setTransactionPartialMethod("cash");
+                                    setTransactionPartialPaymentOpen(true);
+                                  }}
+                                >
+                                  <Wallet className="h-4 w-4 mr-2" />
+                                  Partial Payment
+                                </DropdownMenuItem>
+                              )}
+
+                              {credit.status !== 'paid' && <DropdownMenuSeparator />}
+
+                              {/* Edit option - always available */}
+                              <DropdownMenuItem
+                                className="text-blue-600 focus:text-blue-700 focus:bg-blue-50 cursor-pointer"
                                 onClick={() => {
-                                  setSelectedCreditForMarkPaid(credit);
-                                  setMarkPaidConfirmOpen(true);
+                                  setSelectedCreditForEdit(credit);
+                                  setEditAmount(String(credit.amount));
+                                  setEditDescription(credit.description || "");
+                                  setEditCreditOpen(true);
                                 }}
                               >
-                                <Check className="h-3 w-3 mr-1" />
-                                Mark Paid
-                              </Button>
-                            )}
-                          </div>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </CardContent>
@@ -1286,7 +1416,7 @@ const Credits = () => {
               Please enter your account password to confirm this modification.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="py-4">
             <Label htmlFor="confirm_password">Password</Label>
             <Input
@@ -1316,6 +1446,119 @@ const Credits = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Transaction Partial Payment Dialog (from dropdown menu) */}
+      <Dialog open={transactionPartialPaymentOpen} onOpenChange={setTransactionPartialPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-orange-600" />
+              Record Partial Payment
+            </DialogTitle>
+            <DialogDescription>
+              Record a partial payment for this credit.
+              <br />
+              <span className="font-semibold">Outstanding: {selectedCreditForTransactionPartial && formatCurrency(selectedCreditForTransactionPartial.outstanding ?? selectedCreditForTransactionPartial.amount)}</span>
+              {selectedCreditForTransactionPartial?.total_paid > 0 && (
+                <span className="text-green-600 ml-2">
+                  (Already paid: {formatCurrency(selectedCreditForTransactionPartial.total_paid)})
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="transaction_partial_amount">Payment Amount (₹)</Label>
+              <Input
+                id="transaction_partial_amount"
+                type="number"
+                step="0.01"
+                min="0"
+                max={selectedCreditForTransactionPartial?.outstanding ?? selectedCreditForTransactionPartial?.amount}
+                placeholder="Enter payment amount"
+                value={transactionPartialAmount}
+                onChange={(e) => setTransactionPartialAmount(e.target.value)}
+              />
+              {transactionPartialAmount && parseFloat(transactionPartialAmount) > (selectedCreditForTransactionPartial?.outstanding ?? selectedCreditForTransactionPartial?.amount ?? 0) && (
+                <p className="text-sm text-red-500">
+                  Amount exceeds outstanding balance of {formatCurrency(selectedCreditForTransactionPartial?.outstanding ?? selectedCreditForTransactionPartial?.amount)}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !transactionPartialDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {transactionPartialDate ? format(transactionPartialDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={transactionPartialDate}
+                    onSelect={setTransactionPartialDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transaction_payment_method">Payment Method</Label>
+              <Select value={transactionPartialMethod} onValueChange={setTransactionPartialMethod}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-orange-600 hover:bg-orange-700"
+                onClick={handleTransactionPartialPayment}
+                disabled={
+                  !transactionPartialAmount ||
+                  parseFloat(transactionPartialAmount) <= 0 ||
+                  parseFloat(transactionPartialAmount) > (selectedCreditForTransactionPartial?.outstanding ?? selectedCreditForTransactionPartial?.amount ?? 0)
+                }
+              >
+                Record Payment
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTransactionPartialPaymentOpen(false);
+                  setSelectedCreditForTransactionPartial(null);
+                  setTransactionPartialAmount("");
+                  setTransactionPartialDate(new Date());
+                  setTransactionPartialMethod("cash");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

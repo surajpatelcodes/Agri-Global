@@ -112,7 +112,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
               <h1 className="text-xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                 A.I.A.D.A
               </h1>
-              <p className="text-xs text-gray-500 font-medium">ALL INDIA AGRICULTURE DEALERS ASSOCIATION</p>
+              <p className="text-xs text-gray-500 font-medium">ALL INDIA  ALL DEALERS ASSOCIATION</p>
             </div>
           </div>
           <Button
