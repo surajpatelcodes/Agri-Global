@@ -61,6 +61,17 @@ const Credits = () => {
   const [transactionPartialMethod, setTransactionPartialMethod] = useState("cash");
   const [editLoading, setEditLoading] = useState(false);
 
+  // Submission protection states to prevent duplicate submissions
+  const [isAddCreditSubmitting, setIsAddCreditSubmitting] = useState(false);
+  const [isPartialPaymentSubmitting, setIsPartialPaymentSubmitting] = useState(false);
+  const [isHistoryPaymentSubmitting, setIsHistoryPaymentSubmitting] = useState(false);
+  const [isTransactionPaymentSubmitting, setIsTransactionPaymentSubmitting] = useState(false);
+  const [isMarkPaidSubmitting, setIsMarkPaidSubmitting] = useState(false);
+
+  // Idempotency keys for each form to prevent duplicate database entries
+  const [creditIdempotencyKey, setCreditIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [paymentIdempotencyKey, setPaymentIdempotencyKey] = useState(() => crypto.randomUUID());
+
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -185,6 +196,11 @@ const Credits = () => {
 
   const handleAddCredit = async (e) => {
     e.preventDefault();
+
+    // Prevent duplicate submissions
+    if (isAddCreditSubmitting) return;
+    setIsAddCreditSubmitting(true);
+
     const formData = new FormData(e.target);
 
     try {
@@ -195,7 +211,8 @@ const Credits = () => {
         amount: parseFloat(formData.get("amount")),
         description: formData.get("description"),
         issued_by: user?.id,
-        status: "pending"
+        status: "pending",
+        idempotency_key: creditIdempotencyKey
       };
 
       const { error } = await supabase
@@ -210,17 +227,33 @@ const Credits = () => {
       });
 
       setIsAddDialogOpen(false);
+      setSelectedCustomerId("");
+      setCreditIdempotencyKey(crypto.randomUUID()); // Generate new key for next submission
       queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['customers-with-credit'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
       e.target.reset();
     } catch (error) {
       console.error("Error adding credit:", error);
+
+      // Check if it's a duplicate key error (PostgreSQL error code 23505)
+      if (error.code === '23505' && error.message?.includes('idempotency')) {
+        toast({
+          title: "Already Submitted",
+          description: "This credit has already been recorded. Please refresh if needed.",
+        });
+        setIsAddDialogOpen(false);
+        setCreditIdempotencyKey(crypto.randomUUID());
+        return;
+      }
+
       toast({
         title: "Error",
         description: "Failed to issue credit",
         variant: "destructive",
       });
+    } finally {
+      setIsAddCreditSubmitting(false);
     }
   };
 
@@ -301,13 +334,18 @@ const Credits = () => {
 
   const handlePartialPayment = async (e) => {
     e.preventDefault();
+
+    // Prevent duplicate submissions
+    if (isPartialPaymentSubmitting) return;
+    setIsPartialPaymentSubmitting(true);
+
     const formData = new FormData(e.target);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const partialAmount = parseFloat(formData.get("partial_amount"));
 
-      // Insert payment record
+      // Insert payment record with idempotency key
       const { error: paymentError } = await supabase
         .from("payments")
         .insert([{
@@ -315,7 +353,8 @@ const Credits = () => {
           amount: partialAmount,
           payment_date: format(partialPaymentDate, "yyyy-MM-dd"),
           payment_method: formData.get("payment_method") || "cash",
-          created_by: user?.id
+          created_by: user?.id,
+          idempotency_key: paymentIdempotencyKey
         }]);
 
       if (paymentError) throw paymentError;
@@ -335,16 +374,31 @@ const Credits = () => {
 
       setIsPartialPaymentDialogOpen(false);
       setSelectedCreditForPartial(null);
+      setPaymentIdempotencyKey(crypto.randomUUID()); // Generate new key for next submission
       queryClient.invalidateQueries({ queryKey: ['credits-summary'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'active' });
       e.target.reset();
     } catch (error) {
       console.error("Error recording partial payment:", error);
+
+      // Check if it's a duplicate key error
+      if (error.code === '23505' && error.message?.includes('idempotency')) {
+        toast({
+          title: "Already Submitted",
+          description: "This payment has already been recorded.",
+        });
+        setIsPartialPaymentDialogOpen(false);
+        setPaymentIdempotencyKey(crypto.randomUUID());
+        return;
+      }
+
       toast({
         title: "Error",
         description: "Failed to record partial payment",
         variant: "destructive",
       });
+    } finally {
+      setIsPartialPaymentSubmitting(false);
     }
   };
 
@@ -437,6 +491,10 @@ const Credits = () => {
   const handleMarkAsPaid = async () => {
     if (!selectedCreditForMarkPaid) return;
 
+    // Prevent duplicate submissions
+    if (isMarkPaidSubmitting) return;
+    setIsMarkPaidSubmitting(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -472,12 +530,18 @@ const Credits = () => {
         description: "Failed to mark credit as paid: " + error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsMarkPaidSubmitting(false);
     }
   };
 
   // Handle payment from credit history - auto-distribute to pending credits
   const handleHistoryPartialPayment = async () => {
     if (!historyPartialAmount || !selectedCustomerHistory) return;
+
+    // Prevent duplicate submissions
+    if (isHistoryPaymentSubmitting) return;
+    setIsHistoryPaymentSubmitting(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -489,6 +553,7 @@ const Credits = () => {
           description: "Payment amount must be greater than 0",
           variant: "destructive",
         });
+        setIsHistoryPaymentSubmitting(false);
         return;
       }
 
@@ -500,13 +565,14 @@ const Credits = () => {
           description: "No pending credits found for this customer",
           variant: "destructive",
         });
+        setIsHistoryPaymentSubmitting(false);
         return;
       }
 
       // Link payment to the oldest pending credit
       const targetCredit = pendingCredits[pendingCredits.length - 1]; // oldest first
 
-      // Insert payment record
+      // Insert payment record with idempotency key
       const { error: paymentError } = await supabase
         .from("payments")
         .insert([{
@@ -514,7 +580,8 @@ const Credits = () => {
           amount: paymentAmount,
           payment_date: format(historyPartialDate, "yyyy-MM-dd"),
           payment_method: historyPartialMethod,
-          created_by: user?.id
+          created_by: user?.id,
+          idempotency_key: paymentIdempotencyKey
         }]);
 
       if (paymentError) throw paymentError;
@@ -538,6 +605,7 @@ const Credits = () => {
       setHistoryPartialAmount("");
       setHistoryPartialDate(new Date());
       setHistoryPartialMethod("cash");
+      setPaymentIdempotencyKey(crypto.randomUUID()); // Generate new key for next submission
 
       // Refresh data
       if (selectedCustomerHistory) {
@@ -550,11 +618,25 @@ const Credits = () => {
 
     } catch (error) {
       console.error("Error recording payment:", error);
+
+      // Check if it's a duplicate key error
+      if (error.code === '23505' && error.message?.includes('idempotency')) {
+        toast({
+          title: "Already Submitted",
+          description: "This payment has already been recorded.",
+        });
+        setHistoryPartialPaymentOpen(false);
+        setPaymentIdempotencyKey(crypto.randomUUID());
+        return;
+      }
+
       toast({
         title: "Error",
         description: "Failed to record payment: " + error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsHistoryPaymentSubmitting(false);
     }
   };
 
@@ -645,6 +727,10 @@ const Credits = () => {
   const handleTransactionPartialPayment = async () => {
     if (!transactionPartialAmount || !selectedCreditForTransactionPartial) return;
 
+    // Prevent duplicate submissions
+    if (isTransactionPaymentSubmitting) return;
+    setIsTransactionPaymentSubmitting(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const paymentAmount = parseFloat(transactionPartialAmount);
@@ -656,6 +742,7 @@ const Credits = () => {
           description: "Payment amount must be greater than 0",
           variant: "destructive",
         });
+        setIsTransactionPaymentSubmitting(false);
         return;
       }
 
@@ -666,10 +753,11 @@ const Credits = () => {
           description: `Payment amount cannot exceed outstanding balance of ${formatCurrency(outstandingAmount)}`,
           variant: "destructive",
         });
+        setIsTransactionPaymentSubmitting(false);
         return;
       }
 
-      // Insert payment record
+      // Insert payment record with idempotency key
       const { error: paymentError } = await supabase
         .from("payments")
         .insert([{
@@ -677,7 +765,8 @@ const Credits = () => {
           amount: paymentAmount,
           payment_date: format(transactionPartialDate, "yyyy-MM-dd"),
           payment_method: transactionPartialMethod,
-          created_by: user?.id
+          created_by: user?.id,
+          idempotency_key: paymentIdempotencyKey
         }]);
 
       if (paymentError) throw paymentError;
@@ -701,6 +790,7 @@ const Credits = () => {
       setTransactionPartialAmount("");
       setTransactionPartialDate(new Date());
       setTransactionPartialMethod("cash");
+      setPaymentIdempotencyKey(crypto.randomUUID()); // Generate new key for next submission
 
       // Refresh data
       if (selectedCustomerHistory) {
@@ -713,11 +803,25 @@ const Credits = () => {
 
     } catch (error) {
       console.error("Error recording partial payment:", error);
+
+      // Check if it's a duplicate key error
+      if (error.code === '23505' && error.message?.includes('idempotency')) {
+        toast({
+          title: "Already Submitted",
+          description: "This payment has already been recorded.",
+        });
+        setTransactionPartialPaymentOpen(false);
+        setPaymentIdempotencyKey(crypto.randomUUID());
+        return;
+      }
+
       toast({
         title: "Error",
         description: "Failed to record partial payment: " + error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsTransactionPaymentSubmitting(false);
     }
   };
 
@@ -739,7 +843,15 @@ const Credits = () => {
           </div>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          setIsAddDialogOpen(open);
+          if (open) {
+            // Reset states when dialog opens
+            setCreditIdempotencyKey(crypto.randomUUID());
+            setIsAddCreditSubmitting(false);
+            setSelectedCustomerId("");
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -822,8 +934,15 @@ const Credits = () => {
                   rows={3}
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Issue Credit
+              <Button type="submit" className="w-full" disabled={isAddCreditSubmitting}>
+                {isAddCreditSubmitting ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Processing...
+                  </>
+                ) : (
+                  "Issue Credit"
+                )}
               </Button>
             </form>
           </DialogContent>
@@ -923,7 +1042,13 @@ const Credits = () => {
       )}
 
       {/* Partial Payment Dialog */}
-      <Dialog open={isPartialPaymentDialogOpen} onOpenChange={setIsPartialPaymentDialogOpen}>
+      <Dialog open={isPartialPaymentDialogOpen} onOpenChange={(open) => {
+        setIsPartialPaymentDialogOpen(open);
+        if (open) {
+          setPaymentIdempotencyKey(crypto.randomUUID());
+          setIsPartialPaymentSubmitting(false);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Record Partial Payment</DialogTitle>
@@ -994,8 +1119,15 @@ const Credits = () => {
               </Select>
             </div>
             <div className="flex gap-3">
-              <Button type="submit" className="flex-1">
-                Record Payment
+              <Button type="submit" className="flex-1" disabled={isPartialPaymentSubmitting}>
+                {isPartialPaymentSubmitting ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Processing...
+                  </>
+                ) : (
+                  "Record Payment"
+                )}
               </Button>
               <Button
                 type="button"
