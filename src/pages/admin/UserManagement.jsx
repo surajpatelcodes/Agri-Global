@@ -19,7 +19,32 @@ import { Loader2, Shield, ShieldAlert, UserPlus } from 'lucide-react';
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [assignEmail, setAssignEmail] = useState('');
+    const [assignLoading, setAssignLoading] = useState(false);
     const { toast } = useToast();
+
+    const assignAdminByEmail = async (action) => {
+        const email = assignEmail.trim();
+        if (!email) {
+            toast({ title: 'Email required', description: 'Enter the user email.', variant: 'destructive' });
+            return;
+        }
+        setAssignLoading(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('assign-admin-by-email', {
+                body: { email, action },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            toast({ title: 'Success', description: data?.message || 'Role updated.' });
+            setAssignEmail('');
+            fetchUsers();
+        } catch (e) {
+            toast({ title: 'Failed', description: e.message || 'Could not update role.', variant: 'destructive' });
+        } finally {
+            setAssignLoading(false);
+        }
+    };
 
     const fetchUsers = async () => {
         try {
