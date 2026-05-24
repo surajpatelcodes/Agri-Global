@@ -53,6 +53,7 @@ export type Database = {
           customer_id: number
           description: string | null
           id: number
+          idempotency_key: string | null
           issued_by: string | null
           status: string
         }
@@ -62,6 +63,7 @@ export type Database = {
           customer_id: number
           description?: string | null
           id?: number
+          idempotency_key?: string | null
           issued_by?: string | null
           status?: string
         }
@@ -71,6 +73,7 @@ export type Database = {
           customer_id?: number
           description?: string | null
           id?: number
+          idempotency_key?: string | null
           issued_by?: string | null
           status?: string
         }
@@ -177,6 +180,7 @@ export type Database = {
           created_by: string | null
           credit_id: number
           id: number
+          idempotency_key: string | null
           payment_date: string
           payment_method: string | null
         }
@@ -186,6 +190,7 @@ export type Database = {
           created_by?: string | null
           credit_id: number
           id?: number
+          idempotency_key?: string | null
           payment_date?: string
           payment_method?: string | null
         }
@@ -195,6 +200,7 @@ export type Database = {
           created_by?: string | null
           credit_id?: number
           id?: number
+          idempotency_key?: string | null
           payment_date?: string
           payment_method?: string | null
         }
@@ -467,7 +473,9 @@ export type Database = {
           created_at: string
           description: string
           id: number
+          outstanding: number
           status: string
+          total_paid: number
         }[]
       }
       get_customer_credits_summary: {
@@ -478,8 +486,10 @@ export type Database = {
           customer_name: string
           customer_phone: string
           latest_credit_date: string
+          outstanding_amount: number
           status: string
           total_credit_amount: number
+          total_payments: number
         }[]
       }
       get_customer_outstanding: {

@@ -26,7 +26,7 @@ export function getRating(value: number, metric: keyof typeof THRESHOLDS): 'good
 }
 
 export function logPerformanceMetric(metric: PerformanceMetric) {
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     const emoji = metric.rating === 'good' ? '✅' : metric.rating === 'needs-improvement' ? '⚠️' : '❌';
     console.log(
       `${emoji} ${metric.name}: ${metric.value.toFixed(2)}ms (${metric.rating})`
@@ -131,7 +131,7 @@ export function measureRender(componentName: string, callback: () => void) {
   const endTime = performance.now();
   const renderTime = endTime - startTime;
 
-  if (process.env.NODE_ENV === 'development' && renderTime > 16) {
+  if (import.meta.env.DEV && renderTime > 16) {
     console.warn(`⚠️ ${componentName} render took ${renderTime.toFixed(2)}ms (target: <16ms for 60fps)`);
   }
 }

@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
@@ -47,6 +48,8 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
