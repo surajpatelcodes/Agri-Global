@@ -252,26 +252,24 @@ const UserManagement = () => {
                                                 </Button>
                                             </>
                                         )}
-                                        {user.status !== 'pending' && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => toggleAdminRole(user.id, user.user_roles)}
-                                                className={isAdmin ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"}
-                                            >
-                                                {isAdmin ? (
-                                                    <>
-                                                        <ShieldAlert className="w-4 h-4 mr-2" />
-                                                        Revoke Admin
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Shield className="w-4 h-4 mr-2" />
-                                                        Make Admin
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => toggleAdminRole(user.id, user.user_roles)}
+                                            className={isAdmin ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"}
+                                        >
+                                            {isAdmin ? (
+                                                <>
+                                                    <ShieldAlert className="w-4 h-4 mr-2" />
+                                                    Revoke Admin
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Shield className="w-4 h-4 mr-2" />
+                                                    Make Admin
+                                                </>
+                                            )}
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             );
