@@ -16,7 +16,7 @@ export function usePerformanceMonitor(componentName: string) {
     const renderTime = renderEndTime - renderStartTimeRef.current;
 
     // Only log in development mode
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       const metrics: PerformanceMetrics = {
         componentName,
         renderTime,
@@ -42,7 +42,7 @@ export function useMountTime(componentName: string) {
   useEffect(() => {
     const mountTime = performance.now();
     
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log(`[Performance] ${componentName} mounted at ${mountTime.toFixed(2)}ms`);
     }
 
@@ -50,7 +50,7 @@ export function useMountTime(componentName: string) {
       const unmountTime = performance.now();
       const lifetime = unmountTime - mountTime;
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log(`[Performance] ${componentName} unmounted after ${lifetime.toFixed(2)}ms`);
       }
     };
