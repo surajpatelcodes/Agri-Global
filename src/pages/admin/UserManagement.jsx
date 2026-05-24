@@ -293,6 +293,45 @@ const UserManagement = () => {
                     </Button>
                 </div>
 
+
+                <Card className="border-purple-200">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-purple-700">
+                            <UserPlus className="w-5 h-5" /> Assign Admin by Email
+                        </CardTitle>
+                        <CardDescription>
+                            Grant or revoke admin rights for any registered user by their email address.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <Input
+                                type="email"
+                                placeholder="user@example.com"
+                                value={assignEmail}
+                                onChange={(e) => setAssignEmail(e.target.value)}
+                                disabled={assignLoading}
+                            />
+                            <Button
+                                onClick={() => assignAdminByEmail('grant')}
+                                disabled={assignLoading}
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                                {assignLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4 mr-2" />}
+                                Make Admin
+                            </Button>
+                            <Button
+                                onClick={() => assignAdminByEmail('revoke')}
+                                disabled={assignLoading}
+                                variant="outline"
+                                className="text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                                <ShieldAlert className="w-4 h-4 mr-2" /> Revoke
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <div className="space-y-4">
                     <div className="flex space-x-4 border-b">
                         <button
