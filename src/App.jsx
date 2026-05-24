@@ -48,6 +48,8 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
