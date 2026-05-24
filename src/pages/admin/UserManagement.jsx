@@ -11,13 +11,40 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Shield, ShieldAlert } from 'lucide-react';
+import { Loader2, Shield, ShieldAlert, UserPlus } from 'lucide-react';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [assignEmail, setAssignEmail] = useState('');
+    const [assignLoading, setAssignLoading] = useState(false);
     const { toast } = useToast();
+
+    const assignAdminByEmail = async (action) => {
+        const email = assignEmail.trim();
+        if (!email) {
+            toast({ title: 'Email required', description: 'Enter the user email.', variant: 'destructive' });
+            return;
+        }
+        setAssignLoading(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('assign-admin-by-email', {
+                body: { email, action },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            toast({ title: 'Success', description: data?.message || 'Role updated.' });
+            setAssignEmail('');
+            fetchUsers();
+        } catch (e) {
+            toast({ title: 'Failed', description: e.message || 'Could not update role.', variant: 'destructive' });
+        } finally {
+            setAssignLoading(false);
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -225,26 +252,24 @@ const UserManagement = () => {
                                                 </Button>
                                             </>
                                         )}
-                                        {user.status !== 'pending' && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => toggleAdminRole(user.id, user.user_roles)}
-                                                className={isAdmin ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"}
-                                            >
-                                                {isAdmin ? (
-                                                    <>
-                                                        <ShieldAlert className="w-4 h-4 mr-2" />
-                                                        Revoke Admin
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Shield className="w-4 h-4 mr-2" />
-                                                        Make Admin
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => toggleAdminRole(user.id, user.user_roles)}
+                                            className={isAdmin ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"}
+                                        >
+                                            {isAdmin ? (
+                                                <>
+                                                    <ShieldAlert className="w-4 h-4 mr-2" />
+                                                    Revoke Admin
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Shield className="w-4 h-4 mr-2" />
+                                                    Make Admin
+                                                </>
+                                            )}
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             );
@@ -267,6 +292,45 @@ const UserManagement = () => {
                         Refresh
                     </Button>
                 </div>
+
+
+                <Card className="border-purple-200">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-purple-700">
+                            <UserPlus className="w-5 h-5" /> Assign Admin by Email
+                        </CardTitle>
+                        <CardDescription>
+                            Grant or revoke admin rights for any registered user by their email address.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <Input
+                                type="email"
+                                placeholder="user@example.com"
+                                value={assignEmail}
+                                onChange={(e) => setAssignEmail(e.target.value)}
+                                disabled={assignLoading}
+                            />
+                            <Button
+                                onClick={() => assignAdminByEmail('grant')}
+                                disabled={assignLoading}
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                                {assignLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4 mr-2" />}
+                                Make Admin
+                            </Button>
+                            <Button
+                                onClick={() => assignAdminByEmail('revoke')}
+                                disabled={assignLoading}
+                                variant="outline"
+                                className="text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                                <ShieldAlert className="w-4 h-4 mr-2" /> Revoke
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <div className="space-y-4">
                     <div className="flex space-x-4 border-b">
