@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Shield, ShieldAlert } from 'lucide-react';
+import { Loader2, Shield, ShieldAlert, UserPlus } from 'lucide-react';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
