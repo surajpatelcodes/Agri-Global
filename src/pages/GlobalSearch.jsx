@@ -252,15 +252,34 @@ const GlobalSearch = () => {
         <>
           {searchResult ? (
             searchResult.status === 'no_defaulter' ? (
-              <Card className="border-green-200 bg-green-50">
-                <CardContent className="p-12 text-center">
-                  <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-green-900 mb-2">No Defaulter Credit Found</h3>
-                  <p className="text-green-700 max-w-md mx-auto">
-                    Good news! No defaulter credit history was found associated with Aadhar number <span className="font-mono font-bold">{searchResult.aadhar_no}</span>.
-                  </p>
-                </CardContent>
-              </Card>
+              hasActiveCredit ? (
+                <Card className="border-2 border-yellow-300 bg-yellow-50">
+                  <CardContent className="p-12 text-center">
+                    <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-yellow-900 mb-2">Active Credit Found</h3>
+                    <p className="text-yellow-800 max-w-md mx-auto mb-4">
+                      This customer has outstanding credit but is not marked as a defaulter.
+                    </p>
+                    <div className="inline-block bg-white border border-yellow-300 rounded-lg px-6 py-3">
+                      <p className="text-xs text-yellow-700 font-medium">Total Outstanding</p>
+                      <p className="text-2xl font-bold text-yellow-900">₹{Number(searchResult.total_outstanding || 0).toFixed(2)}</p>
+                    </div>
+                    <p className="text-yellow-700 mt-4 text-sm">
+                      Aadhar: <span className="font-mono font-bold">{searchResult.aadhar_no}</span>
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-green-200 bg-green-50">
+                  <CardContent className="p-12 text-center">
+                    <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-green-900 mb-2">No Defaulter Credit Found</h3>
+                    <p className="text-green-700 max-w-md mx-auto">
+                      Good news! No defaulter credit history was found associated with Aadhar number <span className="font-mono font-bold">{searchResult.aadhar_no}</span>.
+                    </p>
+                  </CardContent>
+                </Card>
+              )
             ) : (
               <div className="space-y-6">
                 {/* Phase 4: Enhanced Global Search Results */}
