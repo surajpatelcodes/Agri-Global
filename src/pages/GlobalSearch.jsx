@@ -259,31 +259,34 @@ const GlobalSearch = () => {
                 {/* Phase 4: Enhanced Global Search Results */}
 
                 {/* Global Identity */}
-                <Card className="border-2 border-blue-200 bg-blue-50">
+                <Card className={`border-2 ${hasActiveCredit ? 'border-yellow-300 bg-yellow-50' : 'border-green-200 bg-green-50'}`}>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-3 text-blue-900">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <User className="h-5 w-5 text-blue-600" />
+                    <CardTitle className={`flex items-center gap-3 ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>
+                      <div className={`p-2 rounded-lg ${hasActiveCredit ? 'bg-yellow-100' : 'bg-green-100'}`}>
+                        <User className={`h-5 w-5 ${hasActiveCredit ? 'text-yellow-600' : 'text-green-600'}`} />
                       </div>
                       Global Customer Identity
+                      <Badge className={`ml-auto ${hasActiveCredit ? 'bg-yellow-200 text-yellow-800 border-yellow-300' : 'bg-green-200 text-green-800 border-green-300'}`}>
+                        {hasActiveCredit ? 'Active Credit' : 'No Active Credit'}
+                      </Badge>
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className={hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}>
                       Unified customer profile across all shops
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <p className="text-sm text-blue-700 font-medium">Aadhar Number</p>
-                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.aadhar_no}</p>
+                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Aadhar Number</p>
+                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.aadhar_no}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-blue-700 font-medium">Name</p>
-                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.name || 'Not provided'}</p>
+                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Name</p>
+                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.name || 'Not provided'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-blue-700 font-medium">Phone</p>
-                        <p className="text-lg font-semibold text-blue-900">{searchResult.global_customer.phone || 'Not provided'}</p>
+                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Phone</p>
+                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.phone || 'Not provided'}</p>
                       </div>
                     </div>
                   </CardContent>
