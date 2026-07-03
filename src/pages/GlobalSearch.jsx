@@ -164,8 +164,10 @@ const GlobalSearch = () => {
   };
 
   const hasActiveCredit = useMemo(() => {
-    if (!searchResult?.shop_profiles || searchResult.status === 'no_defaulter') return false;
-    return searchResult.shop_profiles.some(shop => shop.outstanding > 0);
+    if (!searchResult) return false;
+    if (Number(searchResult.total_outstanding) > 0) return true;
+    if (searchResult.shop_profiles?.some(shop => Number(shop.outstanding) > 0)) return true;
+    return false;
   }, [searchResult]);
 
   return (
