@@ -163,6 +163,11 @@ const GlobalSearch = () => {
     }
   };
 
+  const hasActiveCredit = useMemo(() => {
+    if (!searchResult?.shop_profiles || searchResult.status === 'no_defaulter') return false;
+    return searchResult.shop_profiles.some(shop => shop.outstanding > 0);
+  }, [searchResult]);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
