@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft } from "lucide-react";
+import { Plus, Search, Edit, Trash2, User, Phone, MapPin, Users, Sparkles, IdCard, CreditCard, ArrowLeft, AlertTriangle, ShieldCheck } from "lucide-react";
 import { logger } from "@/utils/logger";
 
 const Customers = () => {
@@ -51,7 +51,39 @@ const Customers = () => {
     });
 
     if (error) throw error;
-    return data || [];
+
+    const customers = data || [];
+    const aadhars = customers.map(c => c.id_proof).filter(Boolean);
+    if (aadhars.length > 0) {
+      const { data: gc } = await supabase
+        .from('global_customers')
+        .select('aadhar_no, is_risky')
+        .in('aadhar_no', aadhars);
+      const riskyMap = new Map((gc || []).map(g => [g.aadhar_no, g.is_risky]));
+      return customers.map(c => ({ ...c, is_risky: !!riskyMap.get(c.id_proof) }));
+    }
+    return customers;
+  };
+
+  const toggleRisky = async (customer) => {
+    try {
+      const newVal = !customer.is_risky;
+      const { error } = await supabase
+        .from('global_customers')
+        .update({ is_risky: newVal })
+        .eq('aadhar_no', customer.id_proof);
+      if (error) throw error;
+      toast({
+        title: newVal ? 'Marked as Risky' : 'Risky mark removed',
+        description: newVal
+          ? `${customer.name} is now flagged as risky across all shops.`
+          : `${customer.name} is no longer flagged as risky.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['customers-with-transactions'], refetchType: 'active' });
+    } catch (err) {
+      console.error('Error toggling risky:', err);
+      toast({ title: 'Error', description: 'Failed to update risky status', variant: 'destructive' });
+    }
   };
 
   // Use React Query for caching and automatic refetches
@@ -637,7 +669,7 @@ const Customers = () => {
         <div className="responsive-grid">
           {filteredCustomers.map((customer) => {
             return (
-              <Card key={customer.id} className="card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full">
+              <Card key={customer.id} className={`card-3d hover-glow group cursor-pointer border-0 shadow-lg overflow-hidden flex flex-col h-full ${customer.is_risky ? 'ring-2 ring-yellow-400 bg-yellow-50/40' : ''}`}>
                 <CardHeader className="pb-3 sm:pb-4">
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex items-start space-x-2 sm:space-x-3 flex-1 min-w-0">
@@ -728,6 +760,23 @@ const Customers = () => {
                       <div className="text-xs sm:text-sm font-semibold text-orange-600 truncate">₹{customer.outstanding.toFixed(0)}</div>
                       <div className="text-[10px] sm:text-xs text-orange-500">Due</div>
                     </div>
+                  </div>
+
+                  {/* Risky toggle */}
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={customer.is_risky ? "default" : "outline"}
+                      className={`w-full ${customer.is_risky ? 'bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500' : 'border-yellow-400 text-yellow-700 hover:bg-yellow-50'}`}
+                      onClick={(e) => { e.stopPropagation(); toggleRisky(customer); }}
+                    >
+                      {customer.is_risky ? (
+                        <><ShieldCheck className="h-4 w-4 mr-2" /> Unmark Risky</>
+                      ) : (
+                        <><AlertTriangle className="h-4 w-4 mr-2" /> Mark as Risky</>
+                      )}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

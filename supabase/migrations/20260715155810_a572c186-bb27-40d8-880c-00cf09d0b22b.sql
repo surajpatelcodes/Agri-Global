@@ -1,0 +1,1 @@
+ALTER TABLE public.global_customers ADD COLUMN IF NOT EXISTS is_risky boolean NOT NULL DEFAULT false;
