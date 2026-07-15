@@ -256,9 +256,9 @@ const GlobalSearch = () => {
                 <Card className="border-2 border-yellow-300 bg-yellow-50">
                   <CardContent className="p-12 text-center">
                     <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-yellow-900 mb-2">Active Credit Found</h3>
+                    <h3 className="text-xl font-semibold text-yellow-900 mb-2">Risky Customer</h3>
                     <p className="text-yellow-800 max-w-md mx-auto mb-4">
-                      This customer has outstanding credit but is not marked as a defaulter.
+                      This customer has been flagged as <span className="font-semibold">Risky</span> by one or more shops. Proceed with caution before issuing credit.
                     </p>
                     <div className="inline-block bg-white border border-yellow-300 rounded-lg px-6 py-3">
                       <p className="text-xs text-yellow-700 font-medium">Total Outstanding</p>
