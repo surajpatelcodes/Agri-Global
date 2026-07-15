@@ -154,6 +154,7 @@ export type Database = {
           aadhar_no: string
           created_at: string | null
           id: string
+          is_risky: boolean
           name: string | null
           phone: string | null
         }
@@ -161,6 +162,7 @@ export type Database = {
           aadhar_no: string
           created_at?: string | null
           id?: string
+          is_risky?: boolean
           name?: string | null
           phone?: string | null
         }
@@ -168,6 +170,7 @@ export type Database = {
           aadhar_no?: string
           created_at?: string | null
           id?: string
+          is_risky?: boolean
           name?: string | null
           phone?: string | null
         }
