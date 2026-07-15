@@ -163,11 +163,11 @@ const GlobalSearch = () => {
     }
   };
 
+  // Yellow card is now driven exclusively by the shop-set "Risky" flag on
+  // the global customer, not by the presence of outstanding credit.
   const hasActiveCredit = useMemo(() => {
     if (!searchResult) return false;
-    if (Number(searchResult.total_outstanding) > 0) return true;
-    if (searchResult.shop_profiles?.some(shop => Number(shop.outstanding) > 0)) return true;
-    return false;
+    return searchResult.global_customer?.is_risky === true;
   }, [searchResult]);
 
   return (
