@@ -1,25 +1,26 @@
+# Security headers for every response
 /*
-  # Security Headers
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   X-XSS-Protection: 1; mode=block
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  
-  # Content Security Policy
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.gpteng.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co;
 
-  # Cache Control for static assets
-  Cache-Control: public, max-age=31536000, immutable
-
-# Cache Control for HTML
+# HTML shell must always revalidate so new deploys are picked up immediately
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
 
-# Cache Control for service worker
+# Hashed build assets are safe to cache forever
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service worker & manifest
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
-
-# Cache Control for manifest
 /site.webmanifest
   Cache-Control: public, max-age=604800
