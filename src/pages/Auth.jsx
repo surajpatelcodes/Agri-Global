@@ -5,12 +5,62 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Leaf, Sparkles, ShoppingBag, Users, Eye, EyeOff, KeyRound } from "lucide-react";
+import {
+  Loader2,
+  Leaf,
+  Sparkles,
+  ShoppingBag,
+  Users,
+  Eye,
+  EyeOff,
+  KeyRound,
+} from "lucide-react";
 import { logger } from "@/utils/logger";
+
+const getAppUrl = (path = "/") => {
+  const configuredUrl = import.meta.env.VITE_APP_URL?.trim();
+  const baseUrl =
+    configuredUrl ||
+    (typeof window !== "undefined"
+      ? window.location.origin
+      : "https://aiada.co.in");
+  const normalizedBase = baseUrl.replace(/\/$/, "");
+  return new URL(path, `${normalizedBase}/`).toString();
+};
+
+const hasRecoveryCallback = (hash = "", search = "") => {
+  const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+  const queryParams = new URLSearchParams(search);
+
+  const isRecoveryType =
+    hashParams.get("type") === "recovery" ||
+    queryParams.get("type") === "recovery";
+  const hasCode = Boolean(hashParams.get("code") || queryParams.get("code"));
+  const hasSessionTokens = Boolean(
+    hashParams.get("access_token") ||
+    hashParams.get("refresh_token") ||
+    queryParams.get("access_token") ||
+    queryParams.get("refresh_token"),
+  );
+
+  return isRecoveryType || hasCode || hasSessionTokens;
+};
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,7 +68,8 @@ const Auth = () => {
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [showForgotPasswordDialog, setShowForgotPasswordDialog] = useState(false);
+  const [showForgotPasswordDialog, setShowForgotPasswordDialog] =
+    useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [isPasswordResetMode, setIsPasswordResetMode] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -35,25 +86,26 @@ const Auth = () => {
   useEffect(() => {
     // Check hash params (Supabase uses #access_token=...&type=recovery format)
     const hashParams = new URLSearchParams(location.hash.substring(1));
-    const hashType = hashParams.get('type');
+    const hashType = hashParams.get("type");
 
     // Also check query params in case redirect format differs
     const queryParams = new URLSearchParams(location.search);
-    const queryType = queryParams.get('type');
+    const queryType = queryParams.get("type");
 
     // Check for error_code which indicates password recovery flow
-    const errorCode = hashParams.get('error_code') || queryParams.get('error_code');
+    const errorCode =
+      hashParams.get("error_code") || queryParams.get("error_code");
 
-    logger.log('Auth URL check:', {
+    logger.log("Auth URL check:", {
       hash: location.hash,
       search: location.search,
       hashType,
       queryType,
-      errorCode
+      errorCode,
     });
 
-    if (hashType === 'recovery' || queryType === 'recovery') {
-      logger.log('Password recovery mode detected from URL');
+    if (hasRecoveryCallback(location.hash, location.search)) {
+      logger.log("Password recovery mode detected from URL");
       setIsPasswordResetMode(true);
       setIsCheckingSession(false);
     }
@@ -61,18 +113,20 @@ const Auth = () => {
 
   // Listen for auth state changes (for password recovery)
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      logger.log('Auth state change:', event, session?.user?.email);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      logger.log("Auth state change:", event, session?.user?.email);
 
-      if (event === 'PASSWORD_RECOVERY') {
-        logger.log('PASSWORD_RECOVERY event received');
+      if (event === "PASSWORD_RECOVERY") {
+        logger.log("PASSWORD_RECOVERY event received");
         setIsPasswordResetMode(true);
         setIsCheckingSession(false);
       }
 
       // Also check if we have a session with recovery type in URL
-      if (session && (location.hash.includes('type=recovery') || location.search.includes('type=recovery'))) {
-        logger.log('Session with recovery type in URL');
+      if (session && hasRecoveryCallback(location.hash, location.search)) {
+        logger.log("Session with recovery type in URL");
         setIsPasswordResetMode(true);
         setIsCheckingSession(false);
       }
@@ -90,9 +144,7 @@ const Auth = () => {
     }
 
     // Check if URL indicates recovery before doing session check
-    const hashParams = new URLSearchParams(location.hash.substring(1));
-    const queryParams = new URLSearchParams(location.search);
-    if (hashParams.get('type') === 'recovery' || queryParams.get('type') === 'recovery') {
+    if (hasRecoveryCallback(location.hash, location.search)) {
       setIsCheckingSession(false);
       return;
     }
@@ -101,19 +153,24 @@ const Auth = () => {
 
     const checkInitialSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (isMounted && session?.user && !isLoggingInRef.current) {
           // Verify the session is still valid by checking the user
-          const { data: { user }, error } = await supabase.auth.getUser();
+          const {
+            data: { user },
+            error,
+          } = await supabase.auth.getUser();
 
           if (user && !error && isMounted) {
-            navigate('/', { replace: true });
+            navigate("/", { replace: true });
           }
         }
       } catch (error) {
         if (isMounted) {
-          console.error('Session check error:', error);
+          console.error("Session check error:", error);
         }
       } finally {
         if (isMounted) {
@@ -170,8 +227,13 @@ const Auth = () => {
 
       // Step 5: Verify correct user was authenticated
       if (data.user.email?.toLowerCase() !== email.toLowerCase()) {
-        console.error('Session mismatch! Expected:', email, 'Got:', data.user.email);
-        await supabase.auth.signOut({ scope: 'local' });
+        console.error(
+          "Session mismatch! Expected:",
+          email,
+          "Got:",
+          data.user.email,
+        );
+        await supabase.auth.signOut({ scope: "local" });
         isLoggingInRef.current = false;
         toast({
           title: "Session Error",
@@ -183,21 +245,22 @@ const Auth = () => {
 
       // Step 5: Check user approval status
       const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('status')
-        .eq('id', data.user.id)
+        .from("profiles")
+        .select("status")
+        .eq("id", data.user.id)
         .single();
 
       if (profileError) {
         console.error("Error fetching profile status:", profileError);
       }
 
-      if (profile?.status === 'pending' || profile?.status === 'rejected') {
-        await supabase.auth.signOut({ scope: 'local' });
+      if (profile?.status === "pending" || profile?.status === "rejected") {
+        await supabase.auth.signOut({ scope: "local" });
         isLoggingInRef.current = false;
         toast({
           title: "Account Pending",
-          description: "Your account is waiting for admin approval. Please contact support.",
+          description:
+            "Your account is waiting for admin approval. Please contact support.",
           variant: "destructive",
         });
         return;
@@ -207,11 +270,13 @@ const Auth = () => {
       if (isAdminLogin) {
         logger.log("Checking admin privileges for user:", data.user.id);
 
-        const { data: hasAdminRole, error: roleError } = await supabase
-          .rpc('has_role', {
+        const { data: hasAdminRole, error: roleError } = await supabase.rpc(
+          "has_role",
+          {
             _user_id: data.user.id,
-            _role: 'admin'
-          });
+            _role: "admin",
+          },
+        );
 
         if (roleError) {
           console.error("Error checking user role:", roleError);
@@ -225,10 +290,10 @@ const Auth = () => {
             title: "Welcome Admin",
             description: "Successfully logged in to admin panel.",
           });
-          navigate('/admin', { replace: true });
+          navigate("/admin", { replace: true });
         } else {
           logger.warn("User does not have admin role.");
-          await supabase.auth.signOut({ scope: 'local' });
+          await supabase.auth.signOut({ scope: "local" });
           isLoggingInRef.current = false;
           toast({
             title: "Access Denied",
@@ -243,7 +308,7 @@ const Auth = () => {
           title: "Welcome back!",
           description: `Successfully logged in as ${data.user.email}`,
         });
-        navigate('/', { replace: true });
+        navigate("/", { replace: true });
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -278,9 +343,8 @@ const Auth = () => {
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: getAppUrl("/reset-password"),
       });
-
 
       if (error) {
         toast({
@@ -358,8 +422,8 @@ const Auth = () => {
         setNewPassword("");
         setConfirmPassword("");
         // Clear the hash from URL
-        window.history.replaceState(null, '', window.location.pathname);
-        navigate('/', { replace: true });
+        window.history.replaceState(null, "", window.location.pathname);
+        navigate("/", { replace: true });
       }
     } catch (error) {
       toast({
@@ -395,7 +459,7 @@ const Auth = () => {
     }
 
     try {
-      const redirectUrl = `${window.location.origin}/`;
+      const redirectUrl = getAppUrl("/");
 
       const { error: authError } = await supabase.auth.signUp({
         email,
@@ -407,8 +471,8 @@ const Auth = () => {
             shop_name: shopName,
             phone: phone,
             gstin: gstin || null,
-          }
-        }
+          },
+        },
       });
 
       if (authError) {
@@ -420,7 +484,8 @@ const Auth = () => {
       } else {
         toast({
           title: "Registration Successful!",
-          description: "Your account has been created and is awaiting admin approval.",
+          description:
+            "Your account has been created and is awaiting admin approval.",
         });
       }
     } catch (error) {
@@ -466,13 +531,17 @@ const Auth = () => {
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
               Reset Password
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm md:text-lg">Enter your new password below</p>
+            <p className="text-gray-600 text-xs sm:text-sm md:text-lg">
+              Enter your new password below
+            </p>
           </div>
 
           {/* Password Reset Card */}
           <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in p-3 sm:p-4 md:p-6">
             <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
-              <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">New Password</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">
+                New Password
+              </CardTitle>
               <CardDescription className="text-xs sm:text-sm md:text-base">
                 Create a strong password for your account
               </CardDescription>
@@ -480,7 +549,10 @@ const Auth = () => {
             <CardContent className="p-0">
               <form onSubmit={handlePasswordReset} className="space-y-4">
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="new-password" className="text-xs sm:text-sm font-medium">
+                  <Label
+                    htmlFor="new-password"
+                    className="text-xs sm:text-sm font-medium"
+                  >
                     New Password <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
@@ -510,7 +582,10 @@ const Auth = () => {
                 </div>
 
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="confirm-password" className="text-xs sm:text-sm font-medium">
+                  <Label
+                    htmlFor="confirm-password"
+                    className="text-xs sm:text-sm font-medium"
+                  >
                     Confirm Password <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
@@ -526,7 +601,9 @@ const Auth = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
                       tabIndex={-1}
                     >
@@ -539,16 +616,27 @@ const Auth = () => {
                   </div>
                 </div>
 
-                {newPassword && confirmPassword && newPassword !== confirmPassword && (
-                  <p className="text-destructive text-xs">Passwords do not match</p>
-                )}
+                {newPassword &&
+                  confirmPassword &&
+                  newPassword !== confirmPassword && (
+                    <p className="text-destructive text-xs">
+                      Passwords do not match
+                    </p>
+                  )}
 
                 <Button
                   type="submit"
                   className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm transition-all duration-300"
-                  disabled={isLoading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                  disabled={
+                    isLoading ||
+                    !newPassword ||
+                    !confirmPassword ||
+                    newPassword !== confirmPassword
+                  }
                 >
-                  {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
+                  {isLoading && (
+                    <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                  )}
                   Confirm New Password
                 </Button>
               </form>
@@ -591,11 +679,15 @@ const Auth = () => {
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
             A.I.A.D.A
           </h1>
-          <p className="text-gray-600 text-xs sm:text-sm md:text-lg leading-tight sm:leading-normal">ALL INDIA AGRICULTURE DEALERS ASSOCIATION</p>
+          <p className="text-gray-600 text-xs sm:text-sm md:text-lg leading-tight sm:leading-normal">
+            ALL INDIA AGRICULTURE DEALERS ASSOCIATION
+          </p>
           <div className="hidden sm:flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-2 sm:mt-4 text-xs sm:text-sm text-gray-500">
             <div className="flex items-center gap-1">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden md:inline">Cross-Shop Customer Credit Checking</span>
+              <span className="hidden md:inline">
+                Cross-Shop Customer Credit Checking
+              </span>
               <span className="md:hidden">Credit Checking</span>
             </div>
             <div className="flex items-center gap-1">
@@ -609,22 +701,44 @@ const Auth = () => {
         {/* Auth Card */}
         <Card className="card-3d glass-card border-0 backdrop-blur-xl shadow-2xl animate-scale-in p-3 sm:p-4 md:p-6">
           <CardHeader className="text-center p-0 sm:p-0 md:p-0 mb-4 sm:mb-5">
-            <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">Welcome</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl md:text-2xl font-heading">
+              Welcome
+            </CardTitle>
             <CardDescription className="text-xs sm:text-sm md:text-base">
-              {isAdminLogin ? "Sign in to Admin Portal" : "Sign in to your account or create a new one"}
+              {isAdminLogin
+                ? "Sign in to Admin Portal"
+                : "Sign in to your account or create a new one"}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-gray-100/50 backdrop-blur-sm h-9 sm:h-10">
-                <TabsTrigger value="login" className="font-medium text-xs sm:text-sm">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" className="font-medium text-xs sm:text-sm">Sign Up</TabsTrigger>
+                <TabsTrigger
+                  value="login"
+                  className="font-medium text-xs sm:text-sm"
+                >
+                  Sign In
+                </TabsTrigger>
+                <TabsTrigger
+                  value="signup"
+                  className="font-medium text-xs sm:text-sm"
+                >
+                  Sign Up
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="login" className="mt-4 sm:mt-5 md:mt-6">
-                <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4 md:space-y-5">
+                <form
+                  onSubmit={handleLogin}
+                  className="space-y-3 sm:space-y-4 md:space-y-5"
+                >
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="login-email" className="text-xs sm:text-sm font-medium">Email</Label>
+                    <Label
+                      htmlFor="login-email"
+                      className="text-xs sm:text-sm font-medium"
+                    >
+                      Email
+                    </Label>
                     <Input
                       id="login-email"
                       name="email"
@@ -636,7 +750,12 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="login-password" className="text-xs sm:text-sm font-medium">Password</Label>
+                    <Label
+                      htmlFor="login-password"
+                      className="text-xs sm:text-sm font-medium"
+                    >
+                      Password
+                    </Label>
                     <div className="relative">
                       <Input
                         id="login-password"
@@ -662,8 +781,14 @@ const Auth = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" className={`w-full h-9 sm:h-10 md:h-11 btn-3d ${isAdminLogin ? 'bg-gray-800 hover:bg-gray-900' : 'bg-gradient-primary hover:shadow-primary'} font-medium text-sm transition-all duration-300`} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
+                  <Button
+                    type="submit"
+                    className={`w-full h-9 sm:h-10 md:h-11 btn-3d ${isAdminLogin ? "bg-gray-800 hover:bg-gray-900" : "bg-gradient-primary hover:shadow-primary"} font-medium text-sm transition-all duration-300`}
+                    disabled={isLoading}
+                  >
+                    {isLoading && (
+                      <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                    )}
                     {isAdminLogin ? "Sign In as Admin" : "Sign In"}
                   </Button>
 
@@ -690,10 +815,18 @@ const Auth = () => {
               </TabsContent>
 
               <TabsContent value="signup" className="mt-4 sm:mt-5 md:mt-6">
-                <form onSubmit={handleSignUp} className="space-y-3 sm:space-y-4">
+                <form
+                  onSubmit={handleSignUp}
+                  className="space-y-3 sm:space-y-4"
+                >
                   <div className="grid grid-cols-1 gap-3 sm:gap-4">
                     <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="signup-name" className="text-xs sm:text-sm font-medium">Full Name</Label>
+                      <Label
+                        htmlFor="signup-name"
+                        className="text-xs sm:text-sm font-medium"
+                      >
+                        Full Name
+                      </Label>
                       <Input
                         id="signup-name"
                         name="fullName"
@@ -704,7 +837,12 @@ const Auth = () => {
                       />
                     </div>
                     <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="signup-shop" className="text-xs sm:text-sm font-medium">Shop Name</Label>
+                      <Label
+                        htmlFor="signup-shop"
+                        className="text-xs sm:text-sm font-medium"
+                      >
+                        Shop Name
+                      </Label>
                       <Input
                         id="signup-shop"
                         name="shopName"
@@ -717,7 +855,12 @@ const Auth = () => {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="signup-phone" className="text-xs sm:text-sm font-medium">Phone Number</Label>
+                      <Label
+                        htmlFor="signup-phone"
+                        className="text-xs sm:text-sm font-medium"
+                      >
+                        Phone Number
+                      </Label>
                       <Input
                         id="signup-phone"
                         name="phone"
@@ -729,7 +872,12 @@ const Auth = () => {
                       />
                     </div>
                     <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="signup-gstin" className="text-xs sm:text-sm font-medium">GSTIN <span className="text-destructive">*</span></Label>
+                      <Label
+                        htmlFor="signup-gstin"
+                        className="text-xs sm:text-sm font-medium"
+                      >
+                        GSTIN <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         id="signup-gstin"
                         name="gstin"
@@ -741,7 +889,12 @@ const Auth = () => {
                     </div>
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="signup-email" className="text-xs sm:text-sm font-medium">Email Address</Label>
+                    <Label
+                      htmlFor="signup-email"
+                      className="text-xs sm:text-sm font-medium"
+                    >
+                      Email Address
+                    </Label>
                     <Input
                       id="signup-email"
                       name="email"
@@ -753,7 +906,12 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="signup-password" className="text-xs sm:text-sm font-medium">Password</Label>
+                    <Label
+                      htmlFor="signup-password"
+                      className="text-xs sm:text-sm font-medium"
+                    >
+                      Password
+                    </Label>
                     <div className="relative">
                       <Input
                         id="signup-password"
@@ -766,7 +924,9 @@ const Auth = () => {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowSignupPassword(!showSignupPassword)}
+                        onClick={() =>
+                          setShowSignupPassword(!showSignupPassword)
+                        }
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
                         tabIndex={-1}
                       >
@@ -778,8 +938,14 @@ const Auth = () => {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />}
+                  <Button
+                    type="submit"
+                    className="w-full h-9 sm:h-10 md:h-11 btn-3d bg-gradient-primary hover:shadow-primary font-medium text-sm"
+                    disabled={isLoading}
+                  >
+                    {isLoading && (
+                      <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                    )}
                     Create Account
                   </Button>
                 </form>
@@ -795,12 +961,16 @@ const Auth = () => {
       </div>
 
       {/* Forgot Password Dialog */}
-      <Dialog open={showForgotPasswordDialog} onOpenChange={setShowForgotPasswordDialog}>
+      <Dialog
+        open={showForgotPasswordDialog}
+        onOpenChange={setShowForgotPasswordDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we'll send you a link to reset your
+              password.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleForgotPassword} className="space-y-4">
