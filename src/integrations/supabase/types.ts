@@ -153,6 +153,7 @@ export type Database = {
         Row: {
           aadhar_no: string
           created_at: string | null
+          created_by: string | null
           id: string
           is_risky: boolean
           name: string | null
@@ -161,6 +162,7 @@ export type Database = {
         Insert: {
           aadhar_no: string
           created_at?: string | null
+          created_by?: string | null
           id?: string
           is_risky?: boolean
           name?: string | null
@@ -169,6 +171,7 @@ export type Database = {
         Update: {
           aadhar_no?: string
           created_at?: string | null
+          created_by?: string | null
           id?: string
           is_risky?: boolean
           name?: string | null
