@@ -5,7 +5,7 @@ export const customerSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(5, "Name must be at least 5 characters")
+    .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be less than 100 characters")
     .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters and spaces"),
   phone: z
