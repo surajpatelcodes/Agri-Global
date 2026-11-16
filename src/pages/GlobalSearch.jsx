@@ -114,39 +114,9 @@ const GlobalSearch = () => {
   // Refresh the search results to get latest data
   const handleRefresh = async () => {
     if (!searchResult || !searchTerm) return;
-
     setRefreshing(true);
     try {
-      const { data, error } = await supabase
-        .rpc("check_customer_credit_status", {
-          _aadhar_number: searchTerm.trim()
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data || data.length === 0 || data[0]?.outstanding_range === 'No Credit History') {
-        setSearchResult(null);
-        toast({
-          title: "No Results",
-          description: "No customer found with this Aadhar number",
-        });
-        return;
-      }
-
-      setSearchResult(data[0]);
-      toast({
-        title: "Refreshed",
-        description: "Customer information updated with latest data",
-      });
-    } catch (error) {
-      console.error("Error refreshing customer data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to refresh customer data",
-        variant: "destructive",
-      });
+      await handleSearch();
     } finally {
       setRefreshing(false);
     }
@@ -282,171 +252,65 @@ const GlobalSearch = () => {
               )
             ) : (
               <div className="space-y-6">
-                {/* Phase 4: Enhanced Global Search Results */}
-
-                {/* Global Identity */}
-                <Card className={`border-2 ${hasActiveCredit ? 'border-yellow-300 bg-yellow-50' : 'border-green-200 bg-green-50'}`}>
+                <Card className="border-2 border-red-300 bg-red-50">
                   <CardHeader>
-                    <CardTitle className={`flex items-center gap-3 ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>
-                      <div className={`p-2 rounded-lg ${hasActiveCredit ? 'bg-yellow-100' : 'bg-green-100'}`}>
-                        <User className={`h-5 w-5 ${hasActiveCredit ? 'text-yellow-600' : 'text-green-600'}`} />
+                    <CardTitle className="flex items-center gap-3 text-red-900">
+                      <div className="p-2 rounded-lg bg-red-100">
+                        <AlertCircle className="h-5 w-5 text-red-600" />
                       </div>
-                      Global Customer Identity
-                      <Badge className={`ml-auto ${hasActiveCredit ? 'bg-yellow-200 text-yellow-800 border-yellow-300' : 'bg-green-200 text-green-800 border-green-300'}`}>
-                        {hasActiveCredit ? 'Active Credit' : 'No Active Credit'}
-                      </Badge>
+                      Defaulter Alert
+                      <Badge className="ml-auto bg-red-600 text-white">DEFAULTER</Badge>
                     </CardTitle>
-                    <CardDescription className={hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}>
-                      Unified customer profile across all shops
+                    <CardDescription className="text-red-700">
+                      This customer is currently marked as a defaulter. Shop and amount details are kept private.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Aadhar Number</p>
-                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.aadhar_no}</p>
+                        <p className="text-sm font-medium text-red-700">Aadhar Number</p>
+                        <p className="text-lg font-semibold text-red-900 font-mono">{searchResult.global_customer?.aadhar_no}</p>
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Name</p>
-                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.name || 'Not provided'}</p>
+                        <p className="text-sm font-medium text-red-700">Name</p>
+                        <p className="text-lg font-semibold text-red-900">{searchResult.global_customer?.name || 'Not provided'}</p>
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${hasActiveCredit ? 'text-yellow-700' : 'text-green-700'}`}>Phone</p>
-                        <p className={`text-lg font-semibold ${hasActiveCredit ? 'text-yellow-900' : 'text-green-900'}`}>{searchResult.global_customer.phone || 'Not provided'}</p>
+                        <p className="text-sm font-medium text-red-700">Phone</p>
+                        <p className="text-lg font-semibold text-red-900">{searchResult.global_customer?.phone || 'Not provided'}</p>
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white border border-red-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-red-700 font-medium">Times Marked Defaulter</p>
+                        <p className="text-3xl font-bold text-red-900">{searchResult.defaulter_summary?.total_defaulter_count ?? 0}</p>
+                      </div>
+                      <div className="bg-white border border-red-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-red-700 font-medium">Flagged by Shops</p>
+                        <p className="text-3xl font-bold text-red-900">{searchResult.defaulter_summary?.distinct_shops_count ?? 0}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-red-900 mb-2">Defaulter History</p>
+                      {searchResult.defaulter_summary?.incidents?.length > 0 ? (
+                        <ul className="space-y-2">
+                          {searchResult.defaulter_summary.incidents.map((inc, i) => (
+                            <li key={i} className="flex items-center justify-between bg-white border border-red-200 rounded-md px-4 py-2 text-sm">
+                              <span className="font-medium text-red-900">Marked as defaulter</span>
+                              <span className="text-red-700">
+                                {new Date(inc.marked_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-red-700 italic">No dated history available.</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Shop Profiles */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5" />
-                      Shop Profiles ({searchResult.shop_profiles?.length || 0} shops)
-                    </CardTitle>
-                    <CardDescription>
-                      Customer exists in these shops
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {searchResult.shop_profiles && searchResult.shop_profiles.length > 0 ? (
-                      <div className="space-y-4">
-                        {searchResult.shop_profiles.map((shop, index) => (
-                          <div key={index} className={`p-4 rounded-lg border-2 ${shop.has_defaulter_credit ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <div className={`p-2 rounded-lg ${shop.has_defaulter_credit ? 'bg-red-100' : 'bg-green-100'}`}>
-                                  <User className={`h-4 w-4 ${shop.has_defaulter_credit ? 'text-red-600' : 'text-green-600'}`} />
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-gray-900">{shop.shop_name}</p>
-                                  <p className="text-sm text-gray-600">{shop.customer_name}</p>
-                                </div>
-                              </div>
-                              {shop.has_defaulter_credit && (
-                                <Badge className="bg-red-100 text-red-800 border-red-300">
-                                  DEFAULTER
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <p className="text-gray-500">Total Credit</p>
-                                <p className="font-semibold text-green-600">₹{shop.total_credits.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500">Total Paid</p>
-                                <p className="font-semibold text-blue-600">₹{shop.total_payments.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500">Outstanding</p>
-                                <p className={`font-semibold ${shop.outstanding > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                                  ₹{shop.outstanding.toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-center py-4">No shop profiles found</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Defaulter Transactions - Detailed View */}
-                {searchResult.defaulter_transactions && searchResult.defaulter_transactions.length > 0 && (
-                  <Card className="border-red-300 bg-red-50">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-red-900">
-                        <AlertCircle className="h-5 w-5 text-red-600" />
-                        Defaulter Transactions ({searchResult.defaulter_transactions.length})
-                      </CardTitle>
-                      <CardDescription className="text-red-700">
-                        Detailed credit and payment information for defaulter accounts
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        {searchResult.defaulter_transactions.map((transaction, index) => (
-                          <div key={index} className="border border-red-200 rounded-lg p-4 bg-white">
-                            <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <p className="font-semibold text-gray-900">Credit #{transaction.credit_id}</p>
-                                <p className="text-sm text-gray-600">{transaction.shop_name} • {transaction.customer_name}</p>
-                              </div>
-                              <Badge className="bg-red-100 text-red-800">DEFAULTER</Badge>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                              <div>
-                                <p className="text-xs text-gray-500">Credit Amount</p>
-                                <p className="font-semibold text-lg text-red-600">₹{transaction.amount.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Total Paid</p>
-                                <p className="font-semibold text-lg text-blue-600">₹{transaction.total_paid.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Outstanding</p>
-                                <p className="font-semibold text-lg text-orange-600">₹{transaction.outstanding.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Issued Date</p>
-                                <p className="font-semibold text-sm text-gray-900">
-                                  {new Date(transaction.issued_date).toLocaleDateString('en-IN')}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Payment History */}
-                            {transaction.payments && transaction.payments.length > 0 ? (
-                              <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Payment History</p>
-                                <div className="space-y-2">
-                                  {transaction.payments.map((payment, pIndex) => (
-                                    <div key={pIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                                      <div>
-                                        <p className="font-medium text-green-600">₹{payment.amount.toFixed(2)}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {new Date(payment.payment_date).toLocaleDateString('en-IN')} • {payment.payment_method}
-                                        </p>
-                                      </div>
-                                      <Badge variant="outline" className="text-xs">Payment #{payment.payment_id}</Badge>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500 italic">No payments recorded</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             )
           ) : (
