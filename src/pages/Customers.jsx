@@ -180,7 +180,7 @@ const Customers = () => {
       // Check if customer with same Aadhar already exists in this shop
       const { data: existingShopCustomer, error: shopCheckError } = await supabase
         .from("customers")
-        .select("id, name")
+        .select("id, name, global_customer_id")
         .eq("id_proof", aadharNumber)
         .eq("created_by", user.id)
         .single();
@@ -189,7 +189,7 @@ const Customers = () => {
         throw shopCheckError;
       }
 
-      if (existingShopCustomer) {
+      if (existingShopCustomer?.global_customer_id) {
         toast({
           title: "Duplicate Customer",
           description: `A customer with Aadhar number ${aadharNumber} already exists in your shop (${existingShopCustomer.name}). Same Aadhar cannot be used for multiple customers in the same shop.`,
@@ -198,7 +198,28 @@ const Customers = () => {
         return;
       }
 
-      // Phase 3: Lookup or create global customer
+      // Create the shop-owned customer first. This establishes the authorized
+      // link needed to look up a shared identity under the tightened RLS rules.
+      let shopCustomerId = existingShopCustomer?.id;
+      if (!shopCustomerId) {
+        const { data: newShopCustomer, error: customerInsertError } = await supabase
+          .from("customers")
+          .insert([{
+            name: formData.get("name"),
+            phone: formData.get("phone"),
+            address: formData.get("address"),
+            id_proof: aadharNumber,
+            created_by: user.id,
+          }])
+          .select("id")
+          .single();
+
+        if (customerInsertError) throw customerInsertError;
+        shopCustomerId = newShopCustomer.id;
+      }
+
+      // Lookup or create the globally shared identity after the local record
+      // exists, so the row-level policy can authorize this shop's lookup.
       let globalCustomerId;
 
       // Check if global customer exists for this Aadhar
@@ -213,22 +234,7 @@ const Customers = () => {
       }
 
       if (existingGlobalCustomer) {
-        // Use existing global customer
         globalCustomerId = existingGlobalCustomer.id;
-
-        // Optional: Update global customer info if different (but keep existing as primary)
-        const customerName = formData.get("name");
-        const customerPhone = formData.get("phone");
-
-        if (existingGlobalCustomer.name !== customerName || existingGlobalCustomer.phone !== customerPhone) {
-          await supabase
-            .from("global_customers")
-            .update({
-              name: existingGlobalCustomer.name || customerName, // Keep existing if present
-              phone: existingGlobalCustomer.phone || customerPhone // Keep existing if present
-            })
-            .eq("id", globalCustomerId);
-        }
       } else {
         // Create new global customer
         const { data: newGlobalCustomer, error: createError } = await supabase
@@ -236,7 +242,8 @@ const Customers = () => {
           .insert([{
             aadhar_no: aadharNumber,
             name: formData.get("name"),
-            phone: formData.get("phone")
+            phone: formData.get("phone"),
+            created_by: user.id,
           }])
           .select("id")
           .single();
@@ -245,19 +252,12 @@ const Customers = () => {
         globalCustomerId = newGlobalCustomer.id;
       }
 
-      // Create shop-specific customer record
-      const customerData = {
-        name: formData.get("name"),
-        phone: formData.get("phone"),
-        address: formData.get("address"),
-        id_proof: aadharNumber,
-        global_customer_id: globalCustomerId,
-        created_by: user?.id,
-      };
-
+      // Attach the shared identity to this shop's customer record.
       const { error } = await supabase
         .from("customers")
-        .insert([customerData]);
+        .update({ global_customer_id: globalCustomerId })
+        .eq("id", shopCustomerId)
+        .eq("created_by", user.id);
 
       if (error) throw error;
 
