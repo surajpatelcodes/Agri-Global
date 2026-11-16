@@ -149,6 +149,48 @@ export type Database = {
           },
         ]
       }
+      defaulter_events: {
+        Row: {
+          action: string
+          created_at: string
+          customer_id: number
+          global_customer_id: string | null
+          id: string
+          shop_id: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          customer_id: number
+          global_customer_id?: string | null
+          id?: string
+          shop_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          customer_id?: number
+          global_customer_id?: string | null
+          id?: string
+          shop_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defaulter_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_outstanding"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "defaulter_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_customers: {
         Row: {
           aadhar_no: string
