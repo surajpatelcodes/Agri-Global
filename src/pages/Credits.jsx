@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,7 +194,7 @@ const Credits = () => {
     };
   }, [refetch]);
 
-  const handleAddCredit = async (e) => {
+  const handleAddCredit = lockAction("handleAddCredit", async (e) => {
     e.preventDefault();
 
     // Prevent duplicate submissions
@@ -332,7 +332,7 @@ const Credits = () => {
     }
   };
 
-  const handlePartialPayment = async (e) => {
+  const handlePartialPayment = lockAction("handlePartialPayment", async (e) => {
     e.preventDefault();
 
     // Prevent duplicate submissions
@@ -536,7 +536,7 @@ const Credits = () => {
   };
 
   // Handle payment from credit history - auto-distribute to pending credits
-  const handleHistoryPartialPayment = async () => {
+  const handleHistoryPartialPayment = lockAction("handleHistoryPartialPayment", async () => {
     if (!historyPartialAmount || !selectedCustomerHistory) return;
 
     // Prevent duplicate submissions
@@ -641,7 +641,7 @@ const Credits = () => {
   };
 
   // Handle edit credit with password confirmation
-  const handleEditCredit = async () => {
+  const handleEditCredit = lockAction("handleEditCredit", async () => {
     if (!selectedCreditForEdit || !editPassword) return;
 
     setEditLoading(true);
@@ -724,7 +724,7 @@ const Credits = () => {
   };
 
   // Handle partial payment for individual transaction from dropdown menu
-  const handleTransactionPartialPayment = async () => {
+  const handleTransactionPartialPayment = lockAction("handleTransactionPartialPayment", async () => {
     if (!transactionPartialAmount || !selectedCreditForTransactionPartial) return;
 
     // Prevent duplicate submissions
