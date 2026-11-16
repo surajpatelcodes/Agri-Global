@@ -194,6 +194,13 @@ const Credits = () => {
     };
   }, [refetch]);
 
+  const actionLocksRef = useRef({});
+  const lockAction = (key, fn) => async (...args) => {
+    if (actionLocksRef.current[key]) { args[0]?.preventDefault?.(); return; }
+    actionLocksRef.current[key] = true;
+    try { return await fn(...args); } finally { actionLocksRef.current[key] = false; }
+  };
+
   const handleAddCredit = lockAction("handleAddCredit", async (e) => {
     e.preventDefault();
 
@@ -255,7 +262,7 @@ const Credits = () => {
     } finally {
       setIsAddCreditSubmitting(false);
     }
-  };
+  });
 
   const handleStatusChange = async (customerId, newStatus) => {
     if (newStatus === "partial") {
@@ -400,7 +407,7 @@ const Credits = () => {
     } finally {
       setIsPartialPaymentSubmitting(false);
     }
-  };
+  });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -638,7 +645,7 @@ const Credits = () => {
     } finally {
       setIsHistoryPaymentSubmitting(false);
     }
-  };
+  });
 
   // Handle edit credit with password confirmation
   const handleEditCredit = lockAction("handleEditCredit", async () => {
@@ -721,7 +728,7 @@ const Credits = () => {
     } finally {
       setEditLoading(false);
     }
-  };
+  });
 
   // Handle partial payment for individual transaction from dropdown menu
   const handleTransactionPartialPayment = lockAction("handleTransactionPartialPayment", async () => {
@@ -823,7 +830,7 @@ const Credits = () => {
     } finally {
       setIsTransactionPaymentSubmitting(false);
     }
-  };
+  });
 
   return (
     <div className="space-y-6">
