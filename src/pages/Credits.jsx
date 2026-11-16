@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,7 +194,14 @@ const Credits = () => {
     };
   }, [refetch]);
 
-  const handleAddCredit = async (e) => {
+  const actionLocksRef = useRef({});
+  const lockAction = (key, fn) => async (...args) => {
+    if (actionLocksRef.current[key]) { args[0]?.preventDefault?.(); return; }
+    actionLocksRef.current[key] = true;
+    try { return await fn(...args); } finally { actionLocksRef.current[key] = false; }
+  };
+
+  const handleAddCredit = lockAction("handleAddCredit", async (e) => {
     e.preventDefault();
 
     // Prevent duplicate submissions
@@ -255,7 +262,7 @@ const Credits = () => {
     } finally {
       setIsAddCreditSubmitting(false);
     }
-  };
+  });
 
   const handleStatusChange = async (customerId, newStatus) => {
     if (newStatus === "partial") {
@@ -332,7 +339,7 @@ const Credits = () => {
     }
   };
 
-  const handlePartialPayment = async (e) => {
+  const handlePartialPayment = lockAction("handlePartialPayment", async (e) => {
     e.preventDefault();
 
     // Prevent duplicate submissions
@@ -400,7 +407,7 @@ const Credits = () => {
     } finally {
       setIsPartialPaymentSubmitting(false);
     }
-  };
+  });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -536,7 +543,7 @@ const Credits = () => {
   };
 
   // Handle payment from credit history - auto-distribute to pending credits
-  const handleHistoryPartialPayment = async () => {
+  const handleHistoryPartialPayment = lockAction("handleHistoryPartialPayment", async () => {
     if (!historyPartialAmount || !selectedCustomerHistory) return;
 
     // Prevent duplicate submissions
@@ -638,10 +645,10 @@ const Credits = () => {
     } finally {
       setIsHistoryPaymentSubmitting(false);
     }
-  };
+  });
 
   // Handle edit credit with password confirmation
-  const handleEditCredit = async () => {
+  const handleEditCredit = lockAction("handleEditCredit", async () => {
     if (!selectedCreditForEdit || !editPassword) return;
 
     setEditLoading(true);
@@ -721,10 +728,10 @@ const Credits = () => {
     } finally {
       setEditLoading(false);
     }
-  };
+  });
 
   // Handle partial payment for individual transaction from dropdown menu
-  const handleTransactionPartialPayment = async () => {
+  const handleTransactionPartialPayment = lockAction("handleTransactionPartialPayment", async () => {
     if (!transactionPartialAmount || !selectedCreditForTransactionPartial) return;
 
     // Prevent duplicate submissions
@@ -823,7 +830,7 @@ const Credits = () => {
     } finally {
       setIsTransactionPaymentSubmitting(false);
     }
-  };
+  });
 
   return (
     <div className="space-y-6">

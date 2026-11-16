@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,9 @@ import {
   Network,
   Sparkles,
   User,
-  TrendingUp
+  TrendingUp,
+  Search,
+  ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +29,16 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
   const { toast } = useToast();
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { role } = useUserRole();
+  const pageInfo = {
+    dashboard: { title: "Dashboard", subtitle: "Overview of your shop's credit and payments" },
+    customers: { title: "Customers", subtitle: "Add and manage your customers" },
+    credits: { title: "Credits", subtitle: "Issue credit, receive payments and view history" },
+    "global-search": { title: "Global Search", subtitle: "Check a customer's status by Aadhaar" },
+    profile: { title: "Profile", subtitle: "Your account and shop details" },
+  };
+  const currentPage = pageInfo[activeTab] || { title: activeTab, subtitle: "" };
 
   const handleLogout = async () => {
     try {
@@ -77,7 +91,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
     {
       id: "global-search",
       label: "Global Search",
-      icon: BarChart3,
+      icon: Search,
       color: "text-teal-600",
       bgColor: "bg-teal-100",
     },
@@ -176,6 +190,17 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
               </button>
             );
           })}
+          {role === 'admin' && (
+            <button
+              onClick={() => { setSidebarOpen(false); navigate('/admin'); }}
+              className="w-full flex items-center space-x-4 px-4 py-4 rounded-2xl text-left transition-all duration-300 group text-gray-700 hover:bg-gray-100/80 hover:shadow-lg"
+            >
+              <div className="p-2.5 rounded-xl bg-amber-100">
+                <ShieldCheck className="h-5 w-5 text-amber-600" />
+              </div>
+              <span className="font-semibold">Admin Portal</span>
+            </button>
+          )}
         </nav>
 
         {/* Footer */}
@@ -210,16 +235,16 @@ const DashboardLayout = ({ children, activeTab, onTabChange }) => {
           {/* Page title */}
           <div className="flex items-center space-x-3">
             <div className="hidden lg:block">
-              <h2 className="text-2xl font-heading font-bold text-gray-900 capitalize">
-                {activeTab}
+              <h2 className="text-2xl font-heading font-bold text-gray-900 ">
+                {currentPage.title}
               </h2>
               <p className="text-sm text-gray-500 font-medium">
-                Cross-shop data visualization
+                {currentPage.subtitle}
               </p>
             </div>
             <div className="lg:hidden">
-              <h2 className="text-xl font-heading font-bold text-gray-900 capitalize">
-                {activeTab}
+              <h2 className="text-xl font-heading font-bold text-gray-900 truncate">
+                {currentPage.title}
               </h2>
             </div>
           </div>

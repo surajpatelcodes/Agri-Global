@@ -213,14 +213,14 @@ const Dashboard = memo(() => {
       title: "Record Payment",
       description: "Add new payment",
       icon: DollarSign,
-      action: () => navigate('/payments'),
+      action: () => navigate('/#credits'),
       gradient: "from-purple-500 to-purple-600",
     },
     {
       title: "View Reports",
-      description: "Coming Soon",
+      description: "Outstanding balances",
       icon: FileText,
-      action: () => navigate('/outstanding'),
+      action: () => navigate('/#credits'),
       gradient: "from-orange-500 to-orange-600",
     },
   ];

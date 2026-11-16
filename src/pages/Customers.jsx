@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +65,12 @@ const Customers = () => {
     return customers;
   };
 
+  const [riskyTarget, setRiskyTarget] = useState(null);
+  const riskyLockRef = useRef(false);
+  const addLockRef = useRef(false);
   const toggleRisky = async (customer) => {
+    if (riskyLockRef.current) return;
+    riskyLockRef.current = true;
     try {
       const newVal = !customer.is_risky;
       const { error } = await supabase
@@ -83,6 +88,8 @@ const Customers = () => {
     } catch (err) {
       console.error('Error toggling risky:', err);
       toast({ title: 'Error', description: 'Failed to update risky status', variant: 'destructive' });
+    } finally {
+      riskyLockRef.current = false;
     }
   };
 
@@ -616,7 +623,11 @@ const Customers = () => {
                 Add a new customer to your customer list and manage their transactions.
               </DialogDescription>
             </DialogHeader>
-            <CustomerForm onSubmit={handleAddCustomer} />
+            <CustomerForm onSubmit={async (e) => {
+              if (addLockRef.current) { e.preventDefault(); return; }
+              addLockRef.current = true;
+              try { await handleAddCustomer(e); } finally { addLockRef.current = false; }
+            }} />
           </DialogContent>
         </Dialog>
       </div>
@@ -769,7 +780,7 @@ const Customers = () => {
                       size="sm"
                       variant={customer.is_risky ? "default" : "outline"}
                       className={`w-full ${customer.is_risky ? 'bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500' : 'border-yellow-400 text-yellow-700 hover:bg-yellow-50'}`}
-                      onClick={(e) => { e.stopPropagation(); toggleRisky(customer); }}
+                      onClick={(e) => { e.stopPropagation(); setRiskyTarget(customer); }}
                     >
                       {customer.is_risky ? (
                         <><ShieldCheck className="h-4 w-4 mr-2" /> Unmark Risky</>
@@ -804,6 +815,28 @@ const Customers = () => {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!riskyTarget} onOpenChange={(o) => { if (!o) setRiskyTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-yellow-700">
+              <AlertTriangle className="h-5 w-5" />
+              {riskyTarget?.is_risky ? 'Remove Risky Mark?' : 'Mark as Risky?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {riskyTarget?.is_risky
+                ? `${riskyTarget?.name} will no longer show as risky in Global Search.`
+                : `${riskyTarget?.name} will show as a yellow "Risky Customer" to all shops in Global Search.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const c = riskyTarget; setRiskyTarget(null); toggleRisky(c); }}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

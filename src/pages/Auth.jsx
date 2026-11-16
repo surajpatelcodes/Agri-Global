@@ -81,6 +81,12 @@ const Auth = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const isLoggingInRef = useRef(false);
+  const submitLockRef = useRef(false);
+  const withLock = (fn) => async (e) => {
+    if (submitLockRef.current) { e?.preventDefault?.(); return; }
+    submitLockRef.current = true;
+    try { await fn(e); } finally { submitLockRef.current = false; }
+  };
 
   // Check for password recovery mode from URL hash or query params - MUST run first
   useEffect(() => {
@@ -547,7 +553,7 @@ const Auth = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <form onSubmit={handlePasswordReset} className="space-y-4">
+              <form onSubmit={withLock(handlePasswordReset)} className="space-y-4">
                 <div className="space-y-1.5 sm:space-y-2">
                   <Label
                     htmlFor="new-password"
@@ -729,7 +735,7 @@ const Auth = () => {
 
               <TabsContent value="login" className="mt-4 sm:mt-5 md:mt-6">
                 <form
-                  onSubmit={handleLogin}
+                  onSubmit={withLock(handleLogin)}
                   className="space-y-3 sm:space-y-4 md:space-y-5"
                 >
                   <div className="space-y-1.5 sm:space-y-2">
@@ -816,7 +822,7 @@ const Auth = () => {
 
               <TabsContent value="signup" className="mt-4 sm:mt-5 md:mt-6">
                 <form
-                  onSubmit={handleSignUp}
+                  onSubmit={withLock(handleSignUp)}
                   className="space-y-3 sm:space-y-4"
                 >
                   <div className="grid grid-cols-1 gap-3 sm:gap-4">
@@ -973,7 +979,7 @@ const Auth = () => {
               password.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleForgotPassword} className="space-y-4">
+          <form onSubmit={withLock(handleForgotPassword)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="forgot-email">Email Address</Label>
               <Input
